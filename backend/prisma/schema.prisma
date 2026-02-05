@@ -1,0 +1,197 @@
+// Prisma Schema for QR Cafe Ordering System
+// Security: Prisma ORM prevents SQL injection by design
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// RESTAURANT
+// ============================================
+model Restaurant {
+  id            String   @id @default(uuid())
+  name          String   // English name
+  nameFr        String?  // French name
+  nameAr        String?  // Arabic name
+  adminEmail    String   @unique
+  adminPassword String   // Hashed with bcrypt
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tables       Table[]
+  menuItems    MenuItem[]
+  orders       Order[]
+  wifiNetworks WifiNetwork[]
+  staff        Staff[]
+
+  @@map("restaurants")
+}
+
+// ============================================
+// WIFI NETWORK (Multi-network support)
+// ============================================
+model WifiNetwork {
+  id           String  @id @default(uuid())
+  restaurantId String
+  networkName  String  // e.g., "Cafe_5G", "Cafe_2.4G"
+  ipRange      String  // CIDR notation: "192.168.1.0/24"
+  networkType  String  @default("main") // "5G", "2.4G", "guest"
+  isActive     Boolean @default(true)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("wifi_networks")
+}
+
+// ============================================
+// STAFF (Waiters, Kitchen staff)
+// ============================================
+model Staff {
+  id           String    @id @default(uuid())
+  restaurantId String
+  name         String
+  pin          String    // 4-6 digit PIN, hashed
+  role         StaffRole @default(WAITER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("staff")
+}
+
+enum StaffRole {
+  WAITER
+  KITCHEN
+  MANAGER
+}
+
+// ============================================
+// TABLE
+// ============================================
+model Table {
+  id           String   @id @default(uuid())
+  restaurantId String
+  tableNumber  Int
+  tableName    String?  // Optional: "Terrace 1", "VIP"
+  capacity     Int      @default(4)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  qrTokens   QRToken[]
+  orders     Order[]
+
+  @@unique([restaurantId, tableNumber])
+  @@map("tables")
+}
+
+// ============================================
+// QR TOKEN (Dynamic, rotating tokens)
+// ============================================
+model QRToken {
+  id        String   @id @default(uuid())
+  tableId   String
+  token     String   @unique // Random secure token
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  table Table @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([expiresAt])
+  @@map("qr_tokens")
+}
+
+// ============================================
+// MENU ITEM
+// ============================================
+model MenuItem {
+  id           String  @id @default(uuid())
+  restaurantId String
+  
+  // Trilingual names
+  name         String  // English
+  nameFr       String? // French
+  nameAr       String? // Arabic
+  
+  // Trilingual descriptions
+  description   String?
+  descriptionFr String?
+  descriptionAr String?
+  
+  // Trilingual categories
+  category     String  // English
+  categoryFr   String? // French
+  categoryAr   String? // Arabic
+  
+  price        Decimal  @db.Decimal(10, 2)
+  imageUrl     String?
+  available    Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([restaurantId, category])
+  @@index([restaurantId, available])
+  @@map("menu_items")
+}
+
+// ============================================
+// ORDER
+// ============================================
+model Order {
+  id           String      @id @default(uuid())
+  restaurantId String
+  tableId      String
+  orderNumber  Int         // Daily incrementing number
+  status       OrderStatus @default(PENDING)
+  totalAmount  Decimal     @db.Decimal(10, 2)
+  notes        String?     // Customer notes
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table      Table       @relation(fields: [tableId], references: [id])
+  items      OrderItem[]
+
+  @@index([restaurantId, status])
+  @@index([restaurantId, createdAt])
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING    // Customer submitted, waiting for waiter
+  ACCEPTED   // Waiter accepted
+  PREPARING  // Kitchen is preparing
+  READY      // Ready for pickup/delivery
+  DELIVERED  // Delivered to table
+  CANCELLED  // Order cancelled
+}
+
+// ============================================
+// ORDER ITEM
+// ============================================
+model OrderItem {
+  id         String  @id @default(uuid())
+  orderId    String
+  menuItemId String
+  quantity   Int     @default(1)
+  unitPrice  Decimal @db.Decimal(10, 2) // Price at time of order
+  notes      String? // Item-specific notes
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@map("order_items")
+}

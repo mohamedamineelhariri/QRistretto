@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap');
+
+/* Base styles */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* RTL support for Arabic */
+  html[dir="rtl"] {
+    font-family: 'Noto Sans Arabic', sans-serif;
+  }
+
+  body {
+    @apply bg-light-bg text-light-text;
+    @apply dark:bg-dark-bg dark:text-dark-text;
+    @apply transition-colors duration-200;
+    min-height: 100vh;
+    min-height: 100dvh; /* Dynamic viewport for mobile */
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Better focus states */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2;
+    @apply dark:ring-offset-dark-bg;
+  }
+}
+
+/* Component styles */
+@layer components {
+  /* Button base */
+  .btn {
+    @apply inline-flex items-center justify-center;
+    @apply px-4 py-3 min-h-touch;
+    @apply font-medium text-base;
+    @apply rounded-lg transition-all duration-200;
+    @apply active:scale-[0.98];
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-white;
+    @apply hover:bg-accent-hover;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply btn bg-light-card text-light-text border border-light-border;
+    @apply dark:bg-dark-card dark:text-dark-text dark:border-dark-border;
+    @apply hover:bg-light-border dark:hover:bg-dark-border;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent;
+    @apply hover:bg-light-border/50 dark:hover:bg-dark-border/50;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-light-card rounded-xl shadow-soft;
+    @apply dark:bg-dark-card;
+    @apply transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-medium;
+    @apply active:scale-[0.99];
+  }
+
+  /* Input */
+  .input {
+    @apply w-full px-4 py-3 min-h-touch;
+    @apply bg-light-bg border border-light-border rounded-lg;
+    @apply dark:bg-dark-bg dark:border-dark-border;
+    @apply text-light-text dark:text-dark-text;
+    @apply placeholder:text-light-muted dark:placeholder:text-dark-muted;
+    @apply focus:border-accent focus:ring-1 focus:ring-accent;
+    @apply transition-colors duration-200;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1;
+    @apply text-xs font-medium rounded-full;
+  }
+
+  .badge-pending {
+    @apply badge bg-status-pending/20 text-status-pending;
+  }
+
+  .badge-accepted {
+    @apply badge bg-status-accepted/20 text-status-accepted;
+  }
+
+  .badge-preparing {
+    @apply badge bg-status-preparing/20 text-status-preparing;
+  }
+
+  .badge-ready {
+    @apply badge bg-status-ready/20 text-status-ready;
+  }
+
+  .badge-delivered {
+    @apply badge bg-status-delivered/20 text-status-delivered;
+  }
+
+  .badge-cancelled {
+    @apply badge bg-status-cancelled/20 text-status-cancelled;
+  }
+
+  /* Status indicator dot */
+  .status-dot {
+    @apply w-2 h-2 rounded-full animate-pulse-soft;
+  }
+
+  /* Bottom sheet (for cart) */
+  .bottom-sheet {
+    @apply fixed bottom-0 left-0 right-0;
+    @apply bg-light-card dark:bg-dark-card;
+    @apply rounded-t-2xl shadow-strong;
+    @apply safe-area-bottom;
+  }
+
+  /* Safe area for notched phones */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent to-emerald-400 bg-clip-text text-transparent;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/70 dark:bg-black/40;
+    @apply backdrop-blur-lg;
+  }
+}
+
+/* Animations */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.3s ease-in-out;
+}

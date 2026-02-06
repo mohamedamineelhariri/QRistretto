@@ -10,7 +10,8 @@ import {
     Download,
     Loader2,
     Grid3X3,
-    X
+    X,
+    ExternalLink
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '../../providers';
@@ -288,6 +289,17 @@ export default function AdminTablesPage() {
                                                 <QrCode className="w-4 h-4 mr-1" />
                                                 View QR
                                             </button>
+
+                                            <a
+                                                href={`${process.env.NEXT_PUBLIC_API_URL}/qr/scan/${table.id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center justify-center w-full text-xs text-accent hover:underline py-1"
+                                            >
+                                                <ExternalLink className="w-3 h-3 mr-1" />
+                                                Test Scan (Debug)
+                                            </a>
+
                                             {isExpired && hasRealToken && (
                                                 <p className="text-[10px] text-red-500 font-medium">
                                                     Session Expired

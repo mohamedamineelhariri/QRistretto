@@ -30,6 +30,8 @@ model Restaurant {
   orders       Order[]
   wifiNetworks WifiNetwork[]
   staff        Staff[]
+  inventoryItems InventoryItem[]
+  bundles      Bundle[]
 
   @@map("restaurants")
 }
@@ -63,6 +65,7 @@ model Staff {
   createdAt    DateTime  @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders     Order[]
 
   @@map("staff")
 }
@@ -136,11 +139,15 @@ model MenuItem {
   imageUrl     String?
   available    Boolean  @default(true)
   sortOrder    Int      @default(0)
+  prepTimeMinutes Int?  // Preparation time in minutes
+  calories     Int?     // Nutritional information
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   orderItems OrderItem[]
+  recipeItems RecipeItem[]
+  bundleItems BundleItem[]
 
   @@index([restaurantId, category])
   @@index([restaurantId, available])
@@ -164,6 +171,8 @@ model Order {
   restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   table      Table       @relation(fields: [tableId], references: [id])
   items      OrderItem[]
+  waiterId   String?
+  waiter     Staff?      @relation(fields: [waiterId], references: [id])
 
   @@index([restaurantId, status])
   @@index([restaurantId, createdAt])
@@ -194,4 +203,81 @@ model OrderItem {
   menuItem MenuItem @relation(fields: [menuItemId], references: [id])
 
   @@map("order_items")
+}
+
+// ============================================
+// INVENTORY ITEM (Raw Ingredients/Stock)
+// ============================================
+model InventoryItem {
+  id              String   @id @default(uuid())
+  restaurantId    String
+  name            String   // e.g., "Eggs", "Flour", "Tomatoes"
+  nameFr          String?
+  nameAr          String?
+  unit            String   // e.g., "kg", "liters", "pieces"
+  currentStock    Decimal  @db.Decimal(10, 3)
+  minStock        Decimal  @db.Decimal(10, 3) // Alert threshold
+  costPerUnit     Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  recipeItems     RecipeItem[]
+  
+  @@index([restaurantId])
+  @@map("inventory_items")
+}
+
+// ============================================
+// RECIPE ITEM (MenuItem → Ingredients Mapping)
+// ============================================
+model RecipeItem {
+  id              String   @id @default(uuid())
+  menuItemId      String
+  inventoryItemId String
+  quantity        Decimal  @db.Decimal(10, 3) // Amount needed per serving
+  
+  menuItem        MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  
+  @@unique([menuItemId, inventoryItemId])
+  @@map("recipe_items")
+}
+
+// ============================================
+// BUNDLE (Combo Meals)
+// ============================================
+model Bundle {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String   // e.g., "Moroccan Breakfast"
+  nameFr       String?
+  nameAr       String?
+  description  String?
+  descriptionFr String?
+  descriptionAr String?
+  price        Decimal  @db.Decimal(10, 2) // Bundle price (can be discounted)
+  imageUrl     String?
+  available    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items        BundleItem[]
+  
+  @@index([restaurantId])
+  @@map("bundles")
+}
+
+model BundleItem {
+  id         String @id @default(uuid())
+  bundleId   String
+  menuItemId String
+  quantity   Int    @default(1) // Number of this item in bundle
+  
+  bundle     Bundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  
+  @@unique([bundleId, menuItemId])
+  @@map("bundle_items")
 }

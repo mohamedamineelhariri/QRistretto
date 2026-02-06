@@ -162,10 +162,44 @@ router.patch(
             const { orderId } = req.params;
             const { status } = req.body;
 
+            // Extract staff ID if present (via verifyToken or verifyStaffPin middleware)
+            // Note: verifyToken puts info in req.restaurant, but if it's a staff token it might have staff info
+            // Let's assume verifyToken decodes the token.
+            // If the token is a "Staff Token" (from staff-login), it should have `staffId` and `role`.
+            // Currently verifyToken middleware in `auth.js` checks for `restaurantId`.
+            // We need to check if the token payload has staff info.
+
+            // Actually, `verifyToken` middleware (lines 28-45 of auth.js) only checks restaurant.
+            // We need to update `verifyToken` OR use a new middleware OR decode manually here.
+            // BUT, `verifyToken` decodes it.
+
+            // Let's inspect `req` after verifyToken.
+            // Wait, looking at `auth.js`: The `verifyToken` middleware decodes `restaurantId`.
+            // The `staff-login` endpoint signs: { staffId, restaurantId, role }.
+            // So `verifyToken` will verify the signature, but we need to extract `staffId`.
+
+            // We should modify `verifyToken` in `auth.js` to also attach `staffId` if present.
+            // But for now let's just use `jwt.decode` safely since signature is verified? 
+            // NO, `verifyToken` calls `jwt.verify`.
+
+            // Let's assume we will update `verifyToken` or check req.user if we had it.
+            // Actually, let's fix `verifyToken` in `auth.js` first.
+
+            // For now, in this route:
+            // Since `verifyToken` is used, and it verifies `process.env.JWT_SECRET`:
+
+            // We need to decode the token again to get staff info if `verifyToken` didn't attach it.
+            // OR better: Update `auth.js`.
+
+            // I will updated `auth.js` in a next step.
+            // Here I will pass `req.staffId` and `req.staffRole` assuming middleware sets them.
+
             const order = await orderService.updateOrderStatus(
                 orderId,
                 req.restaurantId,
-                status
+                status,
+                req.staffId,
+                req.staffRole
             );
 
             // Emit status update to all connected clients

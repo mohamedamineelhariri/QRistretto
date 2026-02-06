@@ -116,7 +116,7 @@ export async function generateQRCodeImage(tableId, baseUrl) {
 
     // Dynamic QR system: QR points to a permanent backend redirector for this table
     // This allows the QR image to stay the same while the backend handles token rotation
-    const apiBaseUrl = process.env.API_URL || 'http://192.168.137.1:5000';
+    const apiBaseUrl = process.env.API_URL || 'http://localhost:5000';
     const qrUrl = `${apiBaseUrl}/api/qr/scan/${tableId}`;
     console.log(`[QR Service] Generating Permanent Dynamic QR for URL: ${qrUrl}`);
 

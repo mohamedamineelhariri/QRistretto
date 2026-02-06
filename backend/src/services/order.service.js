@@ -164,7 +164,7 @@ export async function getOrderById(orderId) {
  * Update order status
  * Security: Only allows valid status transitions
  */
-export async function updateOrderStatus(orderId, restaurantId, newStatus) {
+export async function updateOrderStatus(orderId, restaurantId, newStatus, staffId = null, role = null) {
     // Define valid transitions
     const validTransitions = {
         PENDING: ['ACCEPTED', 'CANCELLED'],
@@ -187,9 +187,38 @@ export async function updateOrderStatus(orderId, restaurantId, newStatus) {
         throw new Error(`Cannot transition from ${order.status} to ${newStatus}`);
     }
 
+    const updateData = { status: newStatus };
+
+    // If accepting order, assign to waiter
+    if (newStatus === 'ACCEPTED' && staffId && role === 'WAITER') {
+        // Check if already assigned
+        if (order.waiterId && order.waiterId !== staffId) {
+            throw new Error('Order is already being handled by another waiter');
+        }
+        updateData.waiterId = staffId;
+    }
+
+    // Validate ownership for delivery
+    if (newStatus === 'DELIVERED') {
+        if (order.waiterId && staffId && order.waiterId !== staffId) {
+            throw new Error('Only the assigned waiter can deliver this order');
+        }
+
+        // Deduct stock when order is delivered
+        try {
+            const { deductStockForOrder } = await import('./inventory.service.js');
+            await deductStockForOrder(orderId);
+        } catch (error) {
+            // Log error but don't block delivery if stock deduction fails
+            console.error('Stock deduction error:', error.message);
+            // Optionally: throw error to prevent delivery if stock is critical
+            // throw new Error(`Cannot deliver order: ${error.message}`);
+        }
+    }
+
     return prisma.order.update({
         where: { id: orderId },
-        data: { status: newStatus },
+        data: updateData,
         include: {
             items: {
                 include: {
@@ -208,6 +237,12 @@ export async function updateOrderStatus(orderId, restaurantId, newStatus) {
                     tableName: true,
                 },
             },
+            waiter: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
         },
     });
 }

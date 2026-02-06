@@ -17,6 +17,8 @@ import tableRoutes from './routes/table.routes.js';
 import orderRoutes from './routes/order.routes.js';
 import qrRoutes from './routes/qr.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import inventoryRoutes from './routes/inventory.routes.js';
+import bundleRoutes from './routes/bundle.routes.js';
 
 // Import socket handler
 import { setupSocketHandlers } from './socket/handlers.js';
@@ -107,6 +109,8 @@ app.use('/api/tables', tableRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/inventory', inventoryRoutes);
+app.use('/api/admin/bundles', bundleRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

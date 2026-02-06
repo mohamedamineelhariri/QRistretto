@@ -72,6 +72,13 @@ export async function getMenuByRestaurant(restaurantId, locale = 'en') {
 export async function getAllMenuItems(restaurantId) {
     return prisma.menuItem.findMany({
         where: { restaurantId },
+        include: {
+            recipeItems: {
+                include: {
+                    inventoryItem: true
+                }
+            }
+        },
         orderBy: [
             { category: 'asc' },
             { sortOrder: 'asc' },
@@ -83,23 +90,40 @@ export async function getAllMenuItems(restaurantId) {
  * Create a new menu item
  */
 export async function createMenuItem(restaurantId, data) {
+    const { recipeItems, ...menuData } = data;
+
     return prisma.menuItem.create({
         data: {
             restaurantId,
-            name: data.name,
-            nameFr: data.nameFr,
-            nameAr: data.nameAr,
-            description: data.description,
-            descriptionFr: data.descriptionFr,
-            descriptionAr: data.descriptionAr,
-            category: data.category,
-            categoryFr: data.categoryFr,
-            categoryAr: data.categoryAr,
-            price: data.price,
-            imageUrl: data.imageUrl,
-            available: data.available ?? true,
-            sortOrder: data.sortOrder ?? 0,
+            name: menuData.name,
+            nameFr: menuData.nameFr,
+            nameAr: menuData.nameAr,
+            description: menuData.description,
+            descriptionFr: menuData.descriptionFr,
+            descriptionAr: menuData.descriptionAr,
+            category: menuData.category,
+            categoryFr: menuData.categoryFr,
+            categoryAr: menuData.categoryAr,
+            price: menuData.price,
+            imageUrl: menuData.imageUrl,
+            available: menuData.available ?? true,
+            sortOrder: menuData.sortOrder ?? 0,
+            prepTimeMinutes: menuData.prepTimeMinutes,
+            calories: menuData.calories,
+            recipeItems: recipeItems ? {
+                create: recipeItems.map(item => ({
+                    inventoryItemId: item.inventoryItemId,
+                    quantity: item.quantity
+                }))
+            } : undefined
         },
+        include: {
+            recipeItems: {
+                include: {
+                    inventoryItem: true
+                }
+            }
+        }
     });
 }
 
@@ -116,23 +140,47 @@ export async function updateMenuItem(itemId, restaurantId, data) {
         throw new Error('Menu item not found');
     }
 
+    const { recipeItems, ...menuData } = data;
+
+    // If recipeItems are being updated, delete existing and create new ones
+    if (recipeItems !== undefined) {
+        await prisma.recipeItem.deleteMany({
+            where: { menuItemId: itemId }
+        });
+    }
+
     return prisma.menuItem.update({
         where: { id: itemId },
         data: {
-            name: data.name,
-            nameFr: data.nameFr,
-            nameAr: data.nameAr,
-            description: data.description,
-            descriptionFr: data.descriptionFr,
-            descriptionAr: data.descriptionAr,
-            category: data.category,
-            categoryFr: data.categoryFr,
-            categoryAr: data.categoryAr,
-            price: data.price,
-            imageUrl: data.imageUrl,
-            available: data.available,
-            sortOrder: data.sortOrder,
+            name: menuData.name,
+            nameFr: menuData.nameFr,
+            nameAr: menuData.nameAr,
+            description: menuData.description,
+            descriptionFr: menuData.descriptionFr,
+            descriptionAr: menuData.descriptionAr,
+            category: menuData.category,
+            categoryFr: menuData.categoryFr,
+            categoryAr: menuData.categoryAr,
+            price: menuData.price,
+            imageUrl: menuData.imageUrl,
+            available: menuData.available,
+            sortOrder: menuData.sortOrder,
+            prepTimeMinutes: menuData.prepTimeMinutes,
+            calories: menuData.calories,
+            recipeItems: recipeItems ? {
+                create: recipeItems.map(item => ({
+                    inventoryItemId: item.inventoryItemId,
+                    quantity: item.quantity
+                }))
+            } : undefined
         },
+        include: {
+            recipeItems: {
+                include: {
+                    inventoryItem: true
+                }
+            }
+        }
     });
 }
 

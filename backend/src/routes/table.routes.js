@@ -43,7 +43,7 @@ router.get(
                 let qrCodes = [];
 
                 // Always provide a QR code image for the table (Permanent QR)
-                const apiBaseUrl = process.env.API_URL || 'http://192.168.137.1:5000';
+                const apiBaseUrl = process.env.API_URL || 'http://localhost:5000';
                 const qrUrl = `${apiBaseUrl}/api/qr/scan/${table.id}`;
                 const qrDataUrl = await (async () => {
                     try {

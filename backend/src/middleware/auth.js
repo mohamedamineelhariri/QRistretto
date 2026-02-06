@@ -44,6 +44,12 @@ export const verifyToken = async (req, res, next) => {
         req.restaurant = restaurant;
         req.restaurantId = decoded.restaurantId;
 
+        // Attach staff info if present
+        if (decoded.staffId) {
+            req.staffId = decoded.staffId;
+            req.staffRole = decoded.role;
+        }
+
         next();
     } catch (error) {
         if (error.name === 'TokenExpiredError') {

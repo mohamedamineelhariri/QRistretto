@@ -14,7 +14,9 @@ import {
     TrendingUp,
     Clock,
     DollarSign,
-    Coffee
+    Coffee,
+    Package,
+    Gift
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '../../providers';
@@ -84,6 +86,8 @@ export default function AdminDashboard() {
         { href: '/admin/tables', label: t('admin.tables'), icon: Grid3X3 },
         { href: '/admin/orders', label: t('admin.orders'), icon: ClipboardList },
         { href: '/admin/staff', label: t('admin.staff'), icon: Users },
+        { href: '/admin/inventory', label: 'Inventory', icon: Package },
+        { href: '/admin/bundles', label: 'Bundles', icon: Gift },
     ];
 
     return (

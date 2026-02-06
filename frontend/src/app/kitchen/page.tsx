@@ -106,18 +106,31 @@ export default function KitchenPage() {
     };
 
     const playNotificationSound = () => {
-        // Simple beep using Web Audio API
+        const audio = new Audio('/sounds/notification.mp3');
+        // Fallback synth
         try {
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 800;
-            oscillator.connect(audioContext.destination);
-            oscillator.start();
-            setTimeout(() => oscillator.stop(), 200);
-        } catch (e) {
-            // Audio not supported
-        }
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(500, ctx.currentTime);
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.2);
+
+            setTimeout(() => {
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(ctx.destination);
+                osc2.frequency.setValueAtTime(800, ctx.currentTime);
+                gain2.gain.setValueAtTime(0.1, ctx.currentTime); // volume
+                osc2.start();
+                osc2.stop(ctx.currentTime + 0.4);
+            }, 250);
+        } catch (e) { }
     };
 
     const getItemName = (item: Order['items'][0]) => {
@@ -195,8 +208,8 @@ export default function KitchenPage() {
                             key={f}
                             onClick={() => setFilter(f)}
                             className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${filter === f
-                                    ? 'bg-accent text-white'
-                                    : 'bg-dark-border text-dark-muted'
+                                ? 'bg-accent text-white'
+                                : 'bg-dark-border text-dark-muted'
                                 }`}
                         >
                             {f === 'all' ? 'All Active' : f.charAt(0) + f.slice(1).toLowerCase()}

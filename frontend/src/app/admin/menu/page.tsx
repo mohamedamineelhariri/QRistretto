@@ -6,17 +6,29 @@ import {
     ArrowLeft,
     Plus,
     Search,
-    MoreVertical,
     Edit2,
     Trash2,
     Eye,
     EyeOff,
     X,
     Loader2,
-    UtensilsCrossed
+    UtensilsCrossed,
+    Clock,
+    Flame
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '../../providers';
+
+interface RecipeItem {
+    inventoryItemId: string;
+    quantity: number;
+}
+
+interface InventoryItem {
+    id: string;
+    name: string;
+    unit: string;
+}
 
 interface MenuItem {
     id: string;
@@ -33,6 +45,14 @@ interface MenuItem {
     imageUrl: string | null;
     available: boolean;
     sortOrder: number;
+    prepTimeMinutes?: number | null;
+    calories?: number | null;
+    recipeItems?: {
+        id: string;
+        inventoryItemId: string;
+        quantity: string;
+        inventoryItem: InventoryItem;
+    }[];
 }
 
 export default function AdminMenuPage() {
@@ -40,11 +60,13 @@ export default function AdminMenuPage() {
     const { t, isRTL } = useApp();
 
     const [items, setItems] = useState<MenuItem[]>([]);
+    const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
     const [saving, setSaving] = useState(false);
+    const [recipeItems, setRecipeItems] = useState<RecipeItem[]>([]);
 
     // Form state
     const [form, setForm] = useState({
@@ -60,6 +82,8 @@ export default function AdminMenuPage() {
         price: '',
         imageUrl: '',
         available: true,
+        prepTimeMinutes: '',
+        calories: '',
     });
 
     useEffect(() => {
@@ -70,6 +94,7 @@ export default function AdminMenuPage() {
         }
         api.setToken(token);
         fetchItems();
+        fetchInventory();
     }, []);
 
     const fetchItems = async () => {
@@ -82,6 +107,17 @@ export default function AdminMenuPage() {
             console.error('Failed to fetch menu:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchInventory = async () => {
+        try {
+            const response = await api.request<{ items: InventoryItem[] }>('/admin/inventory');
+            if (response.success && response.data) {
+                setInventoryItems(response.data.items);
+            }
+        } catch (error) {
+            console.error('Failed to fetch inventory:', error);
         }
     };
 
@@ -123,7 +159,13 @@ export default function AdminMenuPage() {
                 price: item.price,
                 imageUrl: item.imageUrl || '',
                 available: item.available,
+                prepTimeMinutes: item.prepTimeMinutes?.toString() || '',
+                calories: item.calories?.toString() || '',
             });
+            setRecipeItems(item.recipeItems?.map(ri => ({
+                inventoryItemId: ri.inventoryItemId,
+                quantity: parseFloat(ri.quantity)
+            })) || []);
         } else {
             setEditingItem(null);
             setForm({
@@ -131,7 +173,9 @@ export default function AdminMenuPage() {
                 description: '', descriptionFr: '', descriptionAr: '',
                 category: '', categoryFr: '', categoryAr: '',
                 price: '', imageUrl: '', available: true,
+                prepTimeMinutes: '', calories: '',
             });
+            setRecipeItems([]);
         }
         setShowModal(true);
     };
@@ -144,9 +188,11 @@ export default function AdminMenuPage() {
 
         setSaving(true);
         try {
-            const data = {
+            const data: any = {
                 ...form,
                 price: parseFloat(form.price),
+                prepTimeMinutes: form.prepTimeMinutes ? parseInt(form.prepTimeMinutes) : undefined,
+                calories: form.calories ? parseInt(form.calories) : undefined,
                 nameFr: form.nameFr || undefined,
                 nameAr: form.nameAr || undefined,
                 descriptionFr: form.descriptionFr || undefined,
@@ -154,6 +200,7 @@ export default function AdminMenuPage() {
                 categoryFr: form.categoryFr || undefined,
                 categoryAr: form.categoryAr || undefined,
                 imageUrl: form.imageUrl || undefined,
+                recipeItems: recipeItems.length > 0 ? recipeItems : undefined,
             };
 
             if (editingItem) {
@@ -173,6 +220,21 @@ export default function AdminMenuPage() {
         } finally {
             setSaving(false);
         }
+    };
+
+    const addRecipeItem = (inventoryItemId: string) => {
+        if (recipeItems.find(ri => ri.inventoryItemId === inventoryItemId)) return;
+        setRecipeItems([...recipeItems, { inventoryItemId, quantity: 1 }]);
+    };
+
+    const removeRecipeItem = (inventoryItemId: string) => {
+        setRecipeItems(recipeItems.filter(ri => ri.inventoryItemId !== inventoryItemId));
+    };
+
+    const updateRecipeQuantity = (inventoryItemId: string, quantity: number) => {
+        setRecipeItems(recipeItems.map(ri =>
+            ri.inventoryItemId === inventoryItemId ? { ...ri, quantity } : ri
+        ));
     };
 
     const filteredItems = items.filter(item => {
@@ -254,47 +316,62 @@ export default function AdminMenuPage() {
                                     {categoryItems.map((item) => (
                                         <div
                                             key={item.id}
-                                            className={`card p-4 flex items-center gap-4 ${!item.available ? 'opacity-50' : ''
-                                                }`}
+                                            className={`card p-4 ${!item.available ? 'opacity-50' : ''}`}
                                         >
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-medium truncate">{item.name}</span>
-                                                    {!item.available && (
-                                                        <span className="badge bg-light-border dark:bg-dark-border text-xs">
-                                                            Hidden
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-medium truncate">{item.name}</span>
+                                                        {!item.available && (
+                                                            <span className="badge bg-light-border dark:bg-dark-border text-xs">
+                                                                Hidden
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-3 text-sm text-light-muted">
+                                                        <span className="text-accent font-medium">
+                                                            {parseFloat(item.price).toFixed(2)} DH
                                                         </span>
-                                                    )}
+                                                        {item.prepTimeMinutes && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Clock className="w-3 h-3" />
+                                                                {item.prepTimeMinutes}min
+                                                            </span>
+                                                        )}
+                                                        {item.calories && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Flame className="w-3 h-3" />
+                                                                {item.calories}cal
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <p className="text-sm text-accent font-medium">
-                                                    {parseFloat(item.price).toFixed(2)} DH
-                                                </p>
-                                            </div>
 
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    onClick={() => handleToggle(item.id)}
-                                                    className="p-2 rounded-full hover:bg-light-border dark:hover:bg-dark-border"
-                                                    title={item.available ? 'Hide item' : 'Show item'}
-                                                >
-                                                    {item.available ? (
-                                                        <Eye className="w-4 h-4 text-accent" />
-                                                    ) : (
-                                                        <EyeOff className="w-4 h-4 text-light-muted" />
-                                                    )}
-                                                </button>
-                                                <button
-                                                    onClick={() => openModal(item)}
-                                                    className="p-2 rounded-full hover:bg-light-border dark:hover:bg-dark-border"
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(item.id)}
-                                                    className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={() => handleToggle(item.id)}
+                                                        className="p-2 rounded-full hover:bg-light-border dark:hover:bg-dark-border"
+                                                        title={item.available ? 'Hide item' : 'Show item'}
+                                                    >
+                                                        {item.available ? (
+                                                            <Eye className="w-4 h-4 text-accent" />
+                                                        ) : (
+                                                            <EyeOff className="w-4 h-4 text-light-muted" />
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openModal(item)}
+                                                        className="p-2 rounded-full hover:bg-light-border dark:hover:bg-dark-border"
+                                                    >
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(item.id)}
+                                                        className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -307,10 +384,10 @@ export default function AdminMenuPage() {
 
             {/* Add/Edit Modal */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50">
-                    <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-light-bg dark:bg-dark-bg rounded-t-2xl sm:rounded-2xl">
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50 overflow-y-auto">
+                    <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-light-bg dark:bg-dark-bg rounded-t-2xl sm:rounded-2xl my-8">
                         {/* Modal Header */}
-                        <div className="sticky top-0 bg-light-bg dark:bg-dark-bg px-4 py-3 border-b border-light-border dark:border-dark-border flex items-center justify-between">
+                        <div className="sticky top-0 bg-light-bg dark:bg-dark-bg px-4 py-3 border-b border-light-border dark:border-dark-border flex items-center justify-between z-10">
                             <h2 className="text-lg font-bold">
                                 {editingItem ? 'Edit Item' : 'Add Item'}
                             </h2>
@@ -369,40 +446,47 @@ export default function AdminMenuPage() {
                                     required
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Category (French)</label>
-                                    <input
-                                        type="text"
-                                        value={form.categoryFr}
-                                        onChange={(e) => setForm({ ...form, categoryFr: e.target.value })}
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Category (Arabic)</label>
-                                    <input
-                                        type="text"
-                                        value={form.categoryAr}
-                                        onChange={(e) => setForm({ ...form, categoryAr: e.target.value })}
-                                        className="input"
-                                        dir="rtl"
-                                    />
-                                </div>
-                            </div>
 
-                            {/* Price */}
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Price (DH) *</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={form.price}
-                                    onChange={(e) => setForm({ ...form, price: e.target.value })}
-                                    className="input"
-                                    required
-                                />
+                            {/* Price & Details */}
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Price (DH) *</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={form.price}
+                                        onChange={(e) => setForm({ ...form, price: e.target.value })}
+                                        className="input"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">
+                                        <Clock className="w-3 h-3 inline mr-1" />
+                                        Prep (min)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={form.prepTimeMinutes}
+                                        onChange={(e) => setForm({ ...form, prepTimeMinutes: e.target.value })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">
+                                        <Flame className="w-3 h-3 inline mr-1" />
+                                        Calories
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={form.calories}
+                                        onChange={(e) => setForm({ ...form, calories: e.target.value })}
+                                        className="input"
+                                    />
+                                </div>
                             </div>
 
                             {/* Description */}
@@ -411,9 +495,62 @@ export default function AdminMenuPage() {
                                 <textarea
                                     value={form.description}
                                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                                    className="input min-h-[80px] resize-none"
+                                    className="input min-h-[60px] resize-none"
                                     placeholder="Optional description..."
                                 />
+                            </div>
+
+                            {/* Recipe Builder */}
+                            <div>
+                                <label className="block text-sm font-medium mb-2">Recipe (Ingredients)</label>
+                                <div className="border border-light-border dark:border-dark-border rounded-lg p-3 space-y-2">
+                                    {recipeItems.length === 0 ? (
+                                        <p className="text-sm text-light-muted">No ingredients added</p>
+                                    ) : (
+                                        recipeItems.map((item) => {
+                                            const inventoryItem = inventoryItems.find(i => i.id === item.inventoryItemId);
+                                            return (
+                                                <div key={item.inventoryItemId} className="flex items-center gap-2 bg-light-card dark:bg-dark-card p-2 rounded">
+                                                    <span className="text-sm flex-1">{inventoryItem?.name}</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.001"
+                                                        min="0"
+                                                        value={item.quantity}
+                                                        onChange={(e) => updateRecipeQuantity(item.inventoryItemId, parseFloat(e.target.value))}
+                                                        className="input w-20 text-sm py-1"
+                                                    />
+                                                    <span className="text-xs text-light-muted">{inventoryItem?.unit}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeRecipeItem(item.inventoryItemId)}
+                                                        className="text-red-500 hover:text-red-600"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                    <select
+                                        onChange={(e) => {
+                                            if (e.target.value) {
+                                                addRecipeItem(e.target.value);
+                                                e.target.value = '';
+                                            }
+                                        }}
+                                        className="input text-sm"
+                                    >
+                                        <option value="">+ Add ingredient</option>
+                                        {inventoryItems
+                                            .filter(item => !recipeItems.find(ri => ri.inventoryItemId === item.id))
+                                            .map(item => (
+                                                <option key={item.id} value={item.id}>
+                                                    {item.name} ({item.unit})
+                                                </option>
+                                            ))}
+                                    </select>
+                                </div>
                             </div>
 
                             {/* Available */}

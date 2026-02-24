@@ -162,7 +162,26 @@ export default function HomePage() {
                         </div>
                     )}
                 </div>
-
+                {/* 6. Test/Debug Portals (Hidden/Footer) */}
+                <div className="mt-12 pt-8 border-t border-light-border dark:border-dark-border opacity-50 hover:opacity-100 transition-opacity">
+                    <p className="text-xs font-medium uppercase tracking-wider text-light-muted dark:text-dark-muted mb-4">
+                        Test / Debug Portals
+                    </p>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            onClick={() => router.push('/admin')}
+                            className="btn-secondary text-sm py-2 flex items-center justify-center gap-2"
+                        >
+                            Admin Portal
+                        </button>
+                        <button
+                            onClick={() => router.push('/staff/login')}
+                            className="btn-secondary text-sm py-2 flex items-center justify-center gap-2"
+                        >
+                            Staff Portal
+                        </button>
+                    </div>
+                </div>
             </div>
         </main>
     );

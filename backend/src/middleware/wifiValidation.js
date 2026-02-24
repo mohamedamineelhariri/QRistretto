@@ -102,6 +102,10 @@ export const validateWifi = async (req, res, next) => {
         });
 
         const settings = restaurant?.settings || {};
+        // DEBUG: Always bypass in development for easier troubleshooting
+        if (process.env.NODE_ENV === 'development') {
+            return next();
+        }
         if (settings.wifiValidationEnabled === false) {
             return next();
         }

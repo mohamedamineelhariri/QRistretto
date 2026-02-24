@@ -173,7 +173,7 @@ model Order {
   updatedAt    DateTime    @updatedAt
 
   restaurant Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  table      Table       @relation(fields: [tableId], references: [id])
+  table      Table       @relation(fields: [tableId], references: [id], onDelete: Cascade)
   items      OrderItem[]
   waiterId   String?
   waiter     Staff?      @relation(fields: [waiterId], references: [id])
@@ -204,7 +204,7 @@ model OrderItem {
   notes      String? // Item-specific notes
 
   order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
   @@map("order_items")
 }
@@ -242,7 +242,7 @@ model RecipeItem {
   quantity        Decimal  @db.Decimal(10, 3) // Amount needed per serving
   
   menuItem        MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
   
   @@unique([menuItemId, inventoryItemId])
   @@map("recipe_items")
@@ -280,7 +280,7 @@ model BundleItem {
   quantity   Int    @default(1) // Number of this item in bundle
   
   bundle     Bundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   
   @@unique([bundleId, menuItemId])
   @@map("bundle_items")

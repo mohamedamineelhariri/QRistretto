@@ -20,8 +20,8 @@ echo ==========================================
 echo    ✅ SERVERS STARTED!
 echo ==========================================
 echo.
-echo Backend URL: http://192.168.1.200:5000
-echo Frontend URL: http://192.168.1.200:3000
+echo Backend URL: http://10.34.8.97:5000
+echo Frontend URL: http://10.34.8.97:3000
 echo.
 echo Please wait about 10-15 seconds for them to boot up.
 echo Then refresh your browser!

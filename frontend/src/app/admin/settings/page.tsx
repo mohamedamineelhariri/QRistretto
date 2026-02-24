@@ -175,7 +175,7 @@ export default function AdminSettings() {
                                 <label className="block text-sm font-medium mb-1.5 opacity-70">Name (French)</label>
                                 <input
                                     type="text"
-                                    value={formData.nameFr}
+                                    value={formData.nameFr || ''}
                                     onChange={(e) => setFormData({ ...formData, nameFr: e.target.value })}
                                     className="input w-full"
                                 />
@@ -184,7 +184,7 @@ export default function AdminSettings() {
                                 <label className="block text-sm font-medium mb-1.5 opacity-70 text-right">الإسم (بالعربية)</label>
                                 <input
                                     type="text"
-                                    value={formData.nameAr}
+                                    value={formData.nameAr || ''}
                                     onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
                                     className="input w-full text-right"
                                     dir="rtl"

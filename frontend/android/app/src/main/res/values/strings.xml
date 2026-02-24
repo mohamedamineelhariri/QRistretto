@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">QRistretto</string>
+    <string name="title_activity_main">QRistretto</string>
+    <string name="package_name">com.velix.qristretto</string>
+    <string name="custom_url_scheme">com.velix.qristretto</string>
+</resources>

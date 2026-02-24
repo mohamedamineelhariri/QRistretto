@@ -23,6 +23,8 @@ interface Bundle {
     nameFr?: string;
     nameAr?: string;
     description?: string;
+    descriptionFr?: string;
+    descriptionAr?: string;
     price: string;
     available: boolean;
     items: Array<{

@@ -73,7 +73,9 @@ export default function AdminOrdersPage() {
             fetchOrders();
         });
 
-        return () => unsub();
+        return () => {
+            unsub?.();
+        };
     }, []);
 
     const fetchOrders = async () => {
@@ -138,8 +140,8 @@ export default function AdminOrdersPage() {
                                 key={status}
                                 onClick={() => setFilterStatus(status)}
                                 className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${filterStatus === status
-                                        ? 'bg-accent text-white border-accent'
-                                        : 'bg-light-card dark:bg-dark-card border-light-border dark:border-dark-border text-light-muted'
+                                    ? 'bg-accent text-white border-accent'
+                                    : 'bg-light-card dark:bg-dark-card border-light-border dark:border-dark-border text-light-muted'
                                     }`}
                             >
                                 {status.charAt(0) + status.slice(1).toLowerCase()}

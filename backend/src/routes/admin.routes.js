@@ -89,6 +89,10 @@ router.get('/restaurant', async (req, res) => {
                 adminEmail: true,
                 isActive: true,
                 createdAt: true,
+                logoUrl: true,
+                phoneNumber: true,
+                address: true,
+                settings: true,
                 wifiNetworks: true,
                 _count: {
                     select: {
@@ -123,20 +127,36 @@ router.put(
         body('name').optional().trim().isLength({ min: 2, max: 100 }),
         body('nameFr').optional().trim().isLength({ max: 100 }),
         body('nameAr').optional().trim().isLength({ max: 100 }),
+        body('logoUrl').optional().isURL().withMessage('Invalid logo URL'),
+        body('phoneNumber').optional().trim().isLength({ min: 5, max: 20 }).withMessage('Invalid phone number'),
+        body('address').optional().trim().isLength({ min: 5, max: 200 }).withMessage('Address required'),
+        body('settings').optional().isObject().withMessage('Settings must be an object'),
         validate,
     ],
     async (req, res) => {
         try {
-            const { name, nameFr, nameAr } = req.body;
+            const {
+                name, nameFr, nameAr,
+                logoUrl, phoneNumber, address,
+                settings
+            } = req.body;
 
             const restaurant = await prisma.restaurant.update({
                 where: { id: req.restaurantId },
-                data: { name, nameFr, nameAr },
+                data: {
+                    name, nameFr, nameAr,
+                    logoUrl, phoneNumber, address,
+                    settings: settings || undefined
+                },
                 select: {
                     id: true,
                     name: true,
                     nameFr: true,
                     nameAr: true,
+                    logoUrl: true,
+                    phoneNumber: true,
+                    address: true,
+                    settings: true,
                 },
             });
 

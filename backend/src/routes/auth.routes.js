@@ -228,6 +228,7 @@ router.post(
                         id: staff.id,
                         name: staff.name,
                         role: staff.role,
+                        restaurantId: staff.restaurantId, // CRITICAL: Needed for socket room joining
                     },
                     restaurant: staff.restaurant,
                 },
@@ -236,10 +237,56 @@ router.post(
             console.error('Staff login error:', error);
             res.status(500).json({
                 success: false,
-                message: 'Login failed',
+                message: 'Server error',
             });
         }
     }
 );
+
+/**
+ * GET /api/auth/staff
+ * Get list of active staff for login screen (Public)
+ */
+router.get('/staff', async (req, res) => {
+    try {
+        // For this single-tenant demo, getting the first active restaurant
+        // In multi-tenant, we'd pass restaurant slug/ID in query or header
+        const restaurant = await prisma.restaurant.findFirst({
+            where: { isActive: true },
+            select: { id: true },
+        });
+
+        if (!restaurant) {
+            return res.status(404).json({
+                success: false,
+                message: 'No active restaurant found',
+            });
+        }
+
+        const staff = await prisma.staff.findMany({
+            where: {
+                restaurantId: restaurant.id,
+                isActive: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                role: true,
+            },
+            orderBy: { name: 'asc' },
+        });
+
+        res.json({
+            success: true,
+            data: { staff },
+        });
+    } catch (error) {
+        console.error('Fetch staff error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch staff list',
+        });
+    }
+});
 
 export default router;

@@ -11,7 +11,9 @@ import {
     Loader2,
     Grid3X3,
     X,
-    ExternalLink
+    ExternalLink,
+    Edit2,
+    Trash2
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '../../providers';
@@ -35,25 +37,35 @@ function CountdownTimer({ expiresAt, onExpire }: { expiresAt: string; onExpire: 
     const [timeLeft, setTimeLeft] = useState('');
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        const updateTime = () => {
             const expiry = new Date(expiresAt).getTime();
             const now = new Date().getTime();
             const diff = expiry - now;
 
             if (diff <= 0) {
                 setTimeLeft('Expired');
-                clearInterval(interval);
                 onExpire();
-                return;
+                return true; // Finished
             }
 
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((diff % (1000 * 60)) / 1000);
             setTimeLeft(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+            return false;
+        };
+
+        // Update immediately
+        const isFinished = updateTime();
+        if (isFinished) return;
+
+        const interval = setInterval(() => {
+            if (updateTime()) {
+                clearInterval(interval);
+            }
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [expiresAt, onExpire]);
+    }, [expiresAt]); // Removed onExpire from dependencies to prevent infinite loops if onExpire is unstable
 
     return (
         <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${timeLeft === 'Expired' ? 'bg-red-100 text-red-600' : 'bg-accent/10 text-accent'
@@ -73,8 +85,10 @@ export default function AdminTablesPage() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [showQRModal, setShowQRModal] = useState<{ table: Table; qrData: string } | null>(null);
+    const [editTable, setEditTable] = useState<Table | null>(null);
     const [saving, setSaving] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [deleting, setDeleting] = useState<string | null>(null);
 
     const [form, setForm] = useState({
         tableNumber: '',
@@ -145,6 +159,46 @@ export default function AdminTablesPage() {
             console.error('Failed to create table:', error);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleUpdate = async () => {
+        if (!editTable) return;
+
+        setSaving(true);
+        try {
+            const response = await api.updateTable(editTable.id, {
+                tableName: form.tableName || undefined,
+                capacity: parseInt(form.capacity),
+            });
+
+            if (response.success) {
+                fetchTables();
+                setEditTable(null);
+                setForm({ tableNumber: '', tableName: '', capacity: '4' });
+            }
+        } catch (error) {
+            console.error('Failed to update table:', error);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async (tableId: string) => {
+        if (!confirm('Are you sure you want to delete this table? All associated orders and QR tokens will be lost.')) {
+            return;
+        }
+
+        setDeleting(tableId);
+        try {
+            const response = await api.deleteTable(tableId);
+            if (response.success) {
+                setTables(prev => prev.filter(t => t.id !== tableId));
+            }
+        } catch (error) {
+            console.error('Failed to delete table:', error);
+        } finally {
+            setDeleting(null);
         }
     };
 
@@ -253,6 +307,30 @@ export default function AdminTablesPage() {
 
                             return (
                                 <div key={table.id} className="card p-4 text-center">
+                                    <div className="flex justify-end gap-1 mb-1">
+                                        <button
+                                            onClick={() => {
+                                                setEditTable(table);
+                                                setForm({
+                                                    tableNumber: table.tableNumber.toString(),
+                                                    tableName: table.tableName || '',
+                                                    capacity: table.capacity.toString()
+                                                });
+                                            }}
+                                            className="p-1.5 rounded-lg text-light-muted hover:text-accent hover:bg-light-border dark:hover:bg-dark-border transition-colors"
+                                            title="Edit Table"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(table.id)}
+                                            disabled={deleting === table.id}
+                                            className="p-1.5 rounded-lg text-light-muted hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                                            title="Delete Table"
+                                        >
+                                            {deleting === table.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                        </button>
+                                    </div>
                                     <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-accent/10 flex items-center justify-center">
                                         <span className="text-xl font-bold text-accent">{table.tableNumber}</span>
                                     </div>
@@ -384,7 +462,65 @@ export default function AdminTablesPage() {
                 </div>
             )}
 
-            {/* QR Code Modal */}
+            {/* Edit Table Modal */}
+            {editTable && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/50">
+                    <div className="w-full max-w-sm bg-light-bg dark:bg-dark-bg rounded-t-2xl sm:rounded-2xl">
+                        <div className="px-4 py-3 border-b border-light-border dark:border-dark-border flex items-center justify-between">
+                            <h2 className="text-lg font-bold">Edit Table {editTable.tableNumber}</h2>
+                            <button
+                                onClick={() => setEditTable(null)}
+                                className="p-2 rounded-full hover:bg-light-border dark:hover:bg-dark-border"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Table Number</label>
+                                <input
+                                    type="number"
+                                    value={form.tableNumber}
+                                    className="input opacity-50 cursor-not-allowed"
+                                    disabled
+                                />
+                                <p className="text-[10px] text-light-muted mt-1">Table number cannot be changed.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Name (optional)</label>
+                                <input
+                                    type="text"
+                                    value={form.tableName}
+                                    onChange={(e) => setForm({ ...form, tableName: e.target.value })}
+                                    className="input"
+                                    placeholder="e.g., Window Seat"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Capacity</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    max="20"
+                                    value={form.capacity}
+                                    onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                                    className="input"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-light-border dark:border-dark-border flex gap-3">
+                            <button onClick={() => setEditTable(null)} className="flex-1 btn-secondary">
+                                {t('common.cancel')}
+                            </button>
+                            <button onClick={handleUpdate} disabled={saving} className="flex-1 btn-primary">
+                                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {showQRModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
                     <div className="w-full max-w-sm bg-light-bg dark:bg-dark-bg rounded-2xl overflow-hidden">

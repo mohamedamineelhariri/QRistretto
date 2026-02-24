@@ -48,7 +48,7 @@ export default function InventoryPage() {
 
     const fetchInventory = async () => {
         try {
-            const response = await api.request<{ items: InventoryItem[] }>('/admin/inventory');
+            const response = await api.getInventory();
             if (response.success && response.data) {
                 setItems(response.data.items);
             }
@@ -68,15 +68,9 @@ export default function InventoryPage() {
         setSaving(true);
         try {
             if (editingItem) {
-                await api.request(`/admin/inventory/${editingItem.id}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(formData)
-                });
+                await api.updateInventoryItem(editingItem.id, formData);
             } else {
-                await api.request('/admin/inventory', {
-                    method: 'POST',
-                    body: JSON.stringify(formData)
-                });
+                await api.createInventoryItem(formData);
             }
             setShowModal(false);
             setEditingItem(null);
@@ -128,7 +122,7 @@ export default function InventoryPage() {
         if (!confirm('Delete this ingredient? Items using it in recipes will prevent deletion.')) return;
 
         try {
-            await api.request(`/admin/inventory/${id}`, { method: 'DELETE' });
+            await api.deleteInventoryItem(id);
             fetchInventory();
         } catch (error: any) {
             alert(error.response?.data?.message || 'Failed to delete item');
@@ -140,10 +134,7 @@ export default function InventoryPage() {
         if (!quantity || isNaN(Number(quantity))) return;
 
         try {
-            await api.request(`/admin/inventory/${id}/add-stock`, {
-                method: 'PATCH',
-                body: JSON.stringify({ quantity: Number(quantity) })
-            });
+            await api.addStock(id, Number(quantity));
             fetchInventory();
         } catch (error) {
             alert('Failed to add stock');
@@ -317,6 +308,16 @@ export default function InventoryPage() {
                                     value={formData.nameFr}
                                     onChange={(e) => setFormData({ ...formData, nameFr: e.target.value })}
                                     className="input"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Name (AR)</label>
+                                <input
+                                    type="text"
+                                    value={formData.nameAr}
+                                    onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                                    className="input text-right"
+                                    dir="rtl"
                                 />
                             </div>
                             <div>

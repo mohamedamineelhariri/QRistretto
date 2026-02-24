@@ -57,8 +57,12 @@ export default function StaffLoginPage() {
                 localStorage.setItem('staff_info', JSON.stringify(response.data.staff));
 
                 // Redirect based on role
+                // Redirect based on role
                 if (response.data.staff.role === 'KITCHEN') {
                     router.push('/kitchen');
+                } else if (response.data.staff.role === 'MANAGER') {
+                    // Manager role doesn't exist technically, but just in case
+                    router.push('/admin/dashboard');
                 } else {
                     router.push('/waiter');
                 }
@@ -81,27 +85,19 @@ export default function StaffLoginPage() {
     // If Admin Token is missing, redirect to Admin Login.
 
     useEffect(() => {
-        const token = localStorage.getItem('admin_token');
-        if (!token) {
-            // For now, redirect to admin login if no token to fetch staff
-            // In a real app, we'd have a 'kiosk' mode.
-            router.push('/admin');
-            return;
-        }
-
-        // Fetch staff
-        api.setToken(token);
+        // Fetch staff list (public)
         fetchStaff();
     }, []);
 
     const fetchStaff = async () => {
         try {
-            const res = await api.getStaff();
+            const res = await api.getPublicStaffList();
             if (res.success && res.data) {
-                setStaffList(res.data.staff.filter((s: any) => s.isActive));
+                setStaffList(res.data.staff.filter((s: any) => s.isActive || s.active !== false));
             }
         } catch (e) {
             console.error(e);
+            setError('Failed to load staff list');
         }
     };
 

@@ -1,4 +1,5 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { body, param } from 'express-validator';
 import { validate } from '../middleware/validation.js';
 import { verifyToken } from '../middleware/auth.js';
@@ -12,9 +13,22 @@ const router = express.Router();
  * POST /api/orders
  * Create new order (customer - requires Wi-Fi validation)
  */
+const orderLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 3, // 3 orders per minute
+    message: {
+        success: false,
+        message: 'Too many orders placed. Please wait a minute before your next order.',
+        messageAr: 'تم تقديم الكثير من الطلبات. يرجى الانتظار لمدة دقيقة قبل طلبك التالي.',
+        messageFr: 'Trop de commandes passées. Veuillez attendre une minute avant votre prochaine commande.',
+    },
+});
+
 router.post(
     '/',
     [
+        orderLimiter,
+        validateWifi,
         body('token').isString().notEmpty().withMessage('QR token required'),
         body('items').isArray({ min: 1 }).withMessage('At least one item required'),
         body('items.*.menuItemId').isUUID().withMessage('Valid menu item ID required'),
@@ -53,7 +67,10 @@ router.post(
 
             // Emit to waiter/kitchen dashboards
             const io = req.app.get('io');
-            io.to(`restaurant:${tableInfo.restaurantId}`).emit('order:new', {
+            const roomName = `restaurant:${tableInfo.restaurantId}`;
+            console.log(`🔌 Emitting 'order:new' to room: ${roomName}`);
+
+            io.to(roomName).emit('order:new', {
                 order,
                 tableNumber: tableInfo.tableNumber,
             });
@@ -204,8 +221,13 @@ router.patch(
 
             // Emit status update to all connected clients
             const io = req.app.get('io');
-            io.to(`restaurant:${req.restaurantId}`).emit('order:updated', { order });
-            io.to(`order:${orderId}`).emit('order:status', {
+            const restaurantRoom = `restaurant:${req.restaurantId}`;
+            const orderRoom = `order:${orderId}`;
+
+            console.log(`🔌 Emitting 'order:updated' to ${restaurantRoom} and 'order:status' to ${orderRoom}`);
+
+            io.to(restaurantRoom).emit('order:updated', { order });
+            io.to(orderRoom).emit('order:status', {
                 orderId,
                 status: order.status,
                 updatedAt: order.updatedAt,
@@ -240,7 +262,7 @@ router.patch(
 
 /**
  * GET /api/orders/history/list
- * Get order history (admin only)
+ * Get order history (admin or staff)
  */
 router.get(
     '/history/list',
@@ -249,8 +271,13 @@ router.get(
         try {
             const limit = Math.min(parseInt(req.query.limit) || 50, 100);
             const offset = parseInt(req.query.offset) || 0;
+            const staffId = req.query.staffId || null;
 
-            const orders = await orderService.getOrderHistory(req.restaurantId, limit, offset);
+            // Security: If not admin, can only see their own history
+            // Actually, verifyToken sets req.staffRole
+            const filterStaffId = req.staffRole === 'WAITER' ? req.staffId : staffId;
+
+            const orders = await orderService.getOrderHistory(req.restaurantId, limit, offset, filterStaffId);
 
             res.json({
                 success: true,

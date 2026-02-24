@@ -21,6 +21,10 @@ model Restaurant {
   adminEmail    String   @unique
   adminPassword String   // Hashed with bcrypt
   isActive      Boolean  @default(true)
+  logoUrl       String?
+  phoneNumber   String?
+  address       String?
+  settings      Json     @default("{}") // Feature toggles and config
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -27,6 +27,13 @@ interface DashboardData {
     totalMenuItems: number;
     totalTables: number;
     todayRevenue: number;
+    lowStockItems?: Array<{
+        id: string;
+        name: string;
+        currentStock: number;
+        minThreshold: number;
+        unit: string;
+    }>;
 }
 
 export default function AdminDashboard() {
@@ -48,9 +55,16 @@ export default function AdminDashboard() {
 
     const fetchDashboard = async () => {
         try {
-            const response = await api.getDashboard();
-            if (response.success && response.data) {
-                setData(response.data);
+            const [dashRes, lowStockRes] = await Promise.all([
+                api.getDashboard(),
+                api.getLowStock()
+            ]);
+
+            if (dashRes.success && dashRes.data) {
+                setData({
+                    ...dashRes.data,
+                    lowStockItems: lowStockRes.success && lowStockRes.data ? lowStockRes.data.items : []
+                });
             }
         } catch (error) {
             console.error('Failed to fetch dashboard:', error);
@@ -88,6 +102,7 @@ export default function AdminDashboard() {
         { href: '/admin/staff', label: t('admin.staff'), icon: Users },
         { href: '/admin/inventory', label: 'Inventory', icon: Package },
         { href: '/admin/bundles', label: 'Bundles', icon: Gift },
+        { href: '/admin/settings', label: 'Settings', icon: Settings },
     ];
 
     return (
@@ -137,6 +152,38 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
+                {/* Low Stock Alerts */}
+                {data?.lowStockItems && data.lowStockItems.length > 0 && (
+                    <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-3 text-red-500">
+                            <Package className="w-5 h-5" />
+                            <h2 className="font-semibold">Low Stock Alerts</h2>
+                        </div>
+                        <div className="space-y-2">
+                            {data.lowStockItems.map((item) => (
+                                <Link
+                                    key={item.id}
+                                    href="/admin/inventory"
+                                    className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl"
+                                >
+                                    <div>
+                                        <p className="font-medium text-red-700 dark:text-red-400">{item.name}</p>
+                                        <p className="text-xs text-red-600 dark:text-red-500 opacity-80">
+                                            Threshold: {item.minThreshold} {item.unit}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-red-700 dark:text-red-400">
+                                            {item.currentStock} {item.unit}
+                                        </p>
+                                        <p className="text-[10px] text-red-600 dark:text-red-500 uppercase font-bold">Refill Required</p>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Quick Links */}
                 <h2 className="font-semibold mb-3">Quick Actions</h2>
                 <div className="grid grid-cols-2 gap-3">
@@ -151,6 +198,12 @@ export default function AdminDashboard() {
                             <Users className="w-5 h-5 text-blue-500" />
                         </div>
                         <span className="font-medium">Waiter View</span>
+                    </Link>
+                    <Link href="/admin/settings" className="card p-4 flex items-center gap-3 hover:shadow-medium transition-shadow">
+                        <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                            <Settings className="w-5 h-5 text-purple-500" />
+                        </div>
+                        <span className="font-medium">Settings</span>
                     </Link>
                 </div>
             </main>

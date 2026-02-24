@@ -165,12 +165,12 @@ export async function getOrderById(orderId) {
  * Security: Only allows valid status transitions
  */
 export async function updateOrderStatus(orderId, restaurantId, newStatus, staffId = null, role = null) {
-    // Define valid transitions
+    // Define valid transitions (Forward & Backward for Undo)
     const validTransitions = {
         PENDING: ['ACCEPTED', 'CANCELLED'],
-        ACCEPTED: ['PREPARING', 'CANCELLED'],
-        PREPARING: ['READY', 'CANCELLED'],
-        READY: ['DELIVERED'],
+        ACCEPTED: ['PREPARING', 'CANCELLED', 'PENDING'], // Backward to PENDING
+        PREPARING: ['READY', 'CANCELLED', 'ACCEPTED'],   // Backward to ACCEPTED
+        READY: ['DELIVERED', 'PREPARING'],               // Backward to PREPARING
         DELIVERED: [], // Final state
         CANCELLED: [], // Final state
     };
@@ -196,6 +196,11 @@ export async function updateOrderStatus(orderId, restaurantId, newStatus, staffI
             throw new Error('Order is already being handled by another waiter');
         }
         updateData.waiterId = staffId;
+    }
+
+    // IF UNDOING: Reverting to PENDING should unassign the waiter
+    if (newStatus === 'PENDING') {
+        updateData.waiterId = null;
     }
 
     // Validate ownership for delivery
@@ -250,12 +255,18 @@ export async function updateOrderStatus(orderId, restaurantId, newStatus, staffI
 /**
  * Get order history (completed orders)
  */
-export async function getOrderHistory(restaurantId, limit = 50, offset = 0) {
+export async function getOrderHistory(restaurantId, limit = 50, offset = 0, staffId = null) {
+    const where = {
+        restaurantId,
+        status: { in: ['DELIVERED', 'CANCELLED'] },
+    };
+
+    if (staffId) {
+        where.waiterId = staffId;
+    }
+
     return prisma.order.findMany({
-        where: {
-            restaurantId,
-            status: { in: ['DELIVERED', 'CANCELLED'] },
-        },
+        where,
         include: {
             items: {
                 include: {

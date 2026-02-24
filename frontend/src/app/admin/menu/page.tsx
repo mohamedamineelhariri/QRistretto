@@ -112,7 +112,7 @@ export default function AdminMenuPage() {
 
     const fetchInventory = async () => {
         try {
-            const response = await api.request<{ items: InventoryItem[] }>('/admin/inventory');
+            const response = await api.getInventory();
             if (response.success && response.data) {
                 setInventoryItems(response.data.items);
             }
@@ -489,15 +489,33 @@ export default function AdminMenuPage() {
                                 </div>
                             </div>
 
-                            {/* Description */}
                             <div>
-                                <label className="block text-sm font-medium mb-1">Description</label>
+                                <label className="block text-sm font-medium mb-1">Description (English)</label>
                                 <textarea
                                     value={form.description}
                                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                                     className="input min-h-[60px] resize-none"
                                     placeholder="Optional description..."
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Description (French)</label>
+                                    <textarea
+                                        value={form.descriptionFr}
+                                        onChange={(e) => setForm({ ...form, descriptionFr: e.target.value })}
+                                        className="input min-h-[60px] resize-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Description (Arabic)</label>
+                                    <textarea
+                                        value={form.descriptionAr}
+                                        onChange={(e) => setForm({ ...form, descriptionAr: e.target.value })}
+                                        className="input min-h-[60px] resize-none text-right"
+                                        dir="rtl"
+                                    />
+                                </div>
                             </div>
 
                             {/* Recipe Builder */}

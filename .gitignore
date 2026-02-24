@@ -37,6 +37,18 @@ backend/prisma/dev.db-journal
 .DS_Store
 Thumbs.db
 
+# Temp/Cache
+**/%AppData/
+**/npm-cache/
+**/.cache/
+**/tmp/
+
 # Project Specific
 backend/test-qr.png
-frontent/next-env.d.ts
+frontend/next-env.d.ts
+backend/node_modules/
+frontend/node_modules/
+node_modules/
+.env*
+!backend/.env.example
+!frontend/.env.example

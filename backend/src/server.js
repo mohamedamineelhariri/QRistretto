@@ -43,12 +43,26 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false,
 }));
 
-// CORS: Only allow frontend origin
+// CORS: Allow both Hotspot IP and Localhost
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
 }));
 
 // Rate limiting: Prevent brute force attacks
@@ -64,16 +78,18 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Stricter rate limit for auth endpoints
+// Auth specific rate limiting (stricter)
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 5, // 5 attempts per 15 min
+    max: 10, // 10 attempts per 15 minutes
     message: {
         success: false,
-        message: 'Too many login attempts, please try again later.',
+        message: 'Too many login attempts. Please try again later.',
     },
 });
 app.use('/api/auth/login', authLimiter);
+
+
 
 // Body parsing with size limits (prevent large payload attacks)
 app.use(express.json({ limit: '10kb' }));
@@ -88,7 +104,7 @@ app.set('trust proxy', 1);
 // ============================================
 const io = new Server(httpServer, {
     cors: {
-        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+        origin: allowedOrigins,
         methods: ['GET', 'POST'],
         credentials: true,
     },
@@ -153,8 +169,9 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ============================================
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, HOST, () => {
     console.log(`
   ╔═══════════════════════════════════════════╗
   ║     🍽️  QR Cafe API Server Started        ║

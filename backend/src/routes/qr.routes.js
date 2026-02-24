@@ -3,6 +3,7 @@ import { param, query } from 'express-validator';
 import { validate } from '../middleware/validation.js';
 import { verifyToken } from '../middleware/auth.js';
 import * as qrService from '../services/qrToken.service.js';
+import { validateWifi } from '../middleware/wifiValidation.js';
 
 const router = express.Router();
 
@@ -16,6 +17,7 @@ router.get(
     [
         param('tableId').isUUID().withMessage('Invalid table ID'),
         validate,
+        validateWifi,
     ],
     async (req, res) => {
         try {

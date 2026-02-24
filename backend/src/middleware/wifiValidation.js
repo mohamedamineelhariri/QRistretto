@@ -65,13 +65,45 @@ function getClientIP(req) {
  */
 export const validateWifi = async (req, res, next) => {
     try {
-        const { restaurantId } = req.params;
+        let { restaurantId } = req.params;
+        const { tableId } = req.params;
+        const { token } = req.body;
+
+        // Priority 1: Direct restaurantId
+        // Priority 2: Lookup via tableId (QR Scan route)
+        if (!restaurantId && tableId) {
+            const table = await prisma.table.findUnique({
+                where: { id: tableId },
+                select: { restaurantId: true },
+            });
+            if (table) restaurantId = table.restaurantId;
+        }
+
+        // Priority 3: Lookup via token (Order creation route)
+        if (!restaurantId && token) {
+            const qrToken = await prisma.qRToken.findFirst({
+                where: { token },
+                include: { table: { select: { restaurantId: true } } },
+            });
+            if (qrToken) restaurantId = qrToken.table.restaurantId;
+        }
 
         if (!restaurantId) {
             return res.status(400).json({
                 success: false,
-                message: 'Restaurant ID required.',
+                message: 'Restaurant context required.',
             });
+        }
+
+        // Feature Toggle check: only validate if WiFi validation is enabled in settings
+        const restaurant = await prisma.restaurant.findUnique({
+            where: { id: restaurantId },
+            select: { settings: true },
+        });
+
+        const settings = restaurant?.settings || {};
+        if (settings.wifiValidationEnabled === false) {
+            return next();
         }
 
         // Get all active Wi-Fi networks for this restaurant

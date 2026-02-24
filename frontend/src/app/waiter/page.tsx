@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, CheckCircle, ChefHat, Bell, Package, XCircle, RefreshCw, Users, Lock, LogOut } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Bell, Package, RefreshCw, Users, Volume2, VolumeX, LogOut, RotateCcw, AlertTriangle, UserCheck, History, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { socketClient } from '@/lib/socket';
 import { useApp } from '../providers';
@@ -14,8 +14,8 @@ interface Order {
     totalAmount: string;
     notes: string | null;
     createdAt: string;
-    waiterId: string | null; // Added
-    waiter?: { name: string }; // Added
+    waiterId: string | null;
+    waiter?: { name: string };
     table: {
         tableNumber: number;
         tableName: string | null;
@@ -23,7 +23,6 @@ interface Order {
     items: Array<{
         id: string;
         quantity: number;
-        unitPrice: string;
         notes: string | null;
         menuItem: {
             name: string;
@@ -33,13 +32,44 @@ interface Order {
     }>;
 }
 
-const statusConfig = {
-    PENDING: { icon: Clock, color: 'text-status-pending', bg: 'bg-status-pending/10', label: 'Pending' },
-    ACCEPTED: { icon: CheckCircle, color: 'text-status-accepted', bg: 'bg-status-accepted/10', label: 'Accepted' },
-    PREPARING: { icon: ChefHat, color: 'text-status-preparing', bg: 'bg-status-preparing/10', label: 'Preparing' },
-    READY: { icon: Bell, color: 'text-status-ready', bg: 'bg-status-ready/10', label: 'Ready' },
-    DELIVERED: { icon: Package, color: 'text-status-delivered', bg: 'bg-status-delivered/10', label: 'Delivered' },
-    CANCELLED: { icon: XCircle, color: 'text-status-cancelled', bg: 'bg-status-cancelled/10', label: 'Cancelled' },
+// Internal component for real-time timer
+function OrderTimer({ createdAt }: { createdAt: string }) {
+    const [elapsed, setElapsed] = useState('');
+    const [isUrgent, setIsUrgent] = useState(false);
+
+    useEffect(() => {
+        const updateTimer = () => {
+            const now = new Date().getTime();
+            const created = new Date(createdAt).getTime();
+            const diff = now - created;
+
+            const mins = Math.floor(diff / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+
+            setElapsed(`${mins}m ${secs}s`);
+            setIsUrgent(mins >= 20);
+        };
+
+        updateTimer();
+        const interval = setInterval(updateTimer, 1000);
+        return () => clearInterval(interval);
+    }, [createdAt]);
+
+    return (
+        <div className={`flex items-center gap-1 font-mono font-bold ${isUrgent ? 'text-red-500 animate-pulse' : 'text-dark-muted'}`}>
+            <Clock className="w-4 h-4" />
+            <span>{elapsed}</span>
+            {isUrgent && <AlertTriangle className="w-4 h-4" />}
+        </div>
+    );
+}
+
+const statusColors = {
+    PENDING: 'bg-status-pending',
+    ACCEPTED: 'bg-status-accepted',
+    PREPARING: 'bg-status-preparing',
+    READY: 'bg-status-ready',
+    DELIVERED: 'bg-status-delivered',
 };
 
 export default function WaiterPage() {
@@ -48,56 +78,32 @@ export default function WaiterPage() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'pending' | 'my-active' | 'ready'>('pending');
-    const [newOrderAlert, setNewOrderAlert] = useState(false);
+    const [restaurantId, setRestaurantId] = useState<string | null>(null);
+    const [isMuted, setIsMuted] = useState(false);
     const [staffInfo, setStaffInfo] = useState<{ id: string; name: string } | null>(null);
+    const [newOrderAlert, setNewOrderAlert] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
 
     // Auth Check
     useEffect(() => {
-        // Try staff token first
         const staffToken = localStorage.getItem('staff_token');
         const staffData = localStorage.getItem('staff_info');
+        const adminToken = localStorage.getItem('admin_token');
 
         if (staffToken && staffData) {
             setStaffInfo(JSON.parse(staffData));
             api.setToken(staffToken);
             fetchOrders();
+        } else if (adminToken) {
+            // Admin acting as waiter
+            api.setToken(adminToken);
+            fetchOrders();
         } else {
-            // Fallback for demo: Check admin token or redirect to login
-            const adminToken = localStorage.getItem('admin_token');
-            if (adminToken) {
-                // If using admin token, we are "Manager" basically.
-                api.setToken(adminToken);
-                fetchOrders();
-            } else {
-                router.push('/staff/login');
-            }
+            router.push('/staff/login');
         }
-    }, []);
-
-    useEffect(() => {
-        socketClient.connect();
-
-        const unsubNew = socketClient.onNewOrder((data) => {
-            setOrders(prev => [data.order as Order, ...prev]);
-            setNewOrderAlert(true);
-            playNotificationSound();
-            setTimeout(() => setNewOrderAlert(false), 3000);
-        });
-
-        const unsubUpdate = socketClient.onOrderUpdated((data) => {
-            setOrders(prev => prev.map(o =>
-                o.id === (data.order as Order).id ? data.order as Order : o
-            ));
-        });
-
-        // Listen for assignment updates specifically if needed, 
-        // but onOrderUpdated handles it if backend sends full object.
-
-        return () => {
-            unsubNew();
-            unsubUpdate();
-        };
-    }, []);
+    }, [router]);
 
     const fetchOrders = async () => {
         try {
@@ -107,7 +113,7 @@ export default function WaiterPage() {
             }
         } catch (error) {
             console.error('Failed to fetch orders:', error);
-            if ((error as any).response?.status === 401) {
+            if ((error as any).status === 401) {
                 router.push('/staff/login');
             }
         } finally {
@@ -116,48 +122,143 @@ export default function WaiterPage() {
     };
 
     const updateStatus = async (orderId: string, status: string) => {
+        // Optimistic Update
+        setOrders(prev => prev.map(o => {
+            if (o.id === orderId) {
+                return {
+                    ...o,
+                    status,
+                    waiterId: status === 'ACCEPTED' ? staffInfo?.id || o.waiterId : o.waiterId
+                };
+            }
+            return o;
+        }));
+
         try {
             await api.updateOrderStatus(orderId, status);
-            // Optimistic update
-            setOrders(prev => prev.map(o => {
-                if (o.id === orderId) {
-                    return { ...o, status, waiterId: staffInfo?.id || o.waiterId, waiter: staffInfo ? { name: staffInfo.name } : o.waiter };
-                }
-                return o;
-            }));
         } catch (error: any) {
             console.error('Failed to update status:', error);
-            alert(error.response?.data?.message || 'Failed to update order status');
+            // Revert on failure (optional, but good practice)
+            fetchOrders();
         }
     };
 
-    const playNotificationSound = () => {
-        const audio = new Audio('/sounds/notification.mp3'); // We need to add this file or use better synth
-        // Fallback synth
+    const fetchHistory = async () => {
+        try {
+            setHistoryLoading(true);
+            const res = await api.getOrderHistory(50, 0, staffInfo?.id);
+            if (res.success && res.data) {
+                setHistoryOrders(res.data.orders);
+            }
+        } catch (error) {
+            console.error('Fetch history error:', error);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    const handleToggleHistory = () => {
+        if (!isHistoryOpen) {
+            fetchHistory();
+        }
+        setIsHistoryOpen(!isHistoryOpen);
+    };
+
+    const playOrderSound = () => {
+        if (isMuted) return;
         try {
             const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.frequency.setValueAtTime(500, ctx.currentTime);
-            osc.type = 'sine';
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            osc.start();
-            osc.stop(ctx.currentTime + 0.2);
-
-            setTimeout(() => {
-                const osc2 = ctx.createOscillator();
-                const gain2 = ctx.createGain();
-                osc2.connect(gain2);
-                gain2.connect(ctx.destination);
-                osc2.frequency.setValueAtTime(800, ctx.currentTime);
-                gain2.gain.setValueAtTime(0.1, ctx.currentTime); // volume
-                osc2.start();
-                osc2.stop(ctx.currentTime + 0.4);
-            }, 250);
+            const playNote = (freq: number, startTime: number, duration: number) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, startTime);
+                gain.gain.setValueAtTime(0, startTime);
+                gain.gain.linearRampToValueAtTime(0.2, startTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            };
+            playNote(660, ctx.currentTime, 0.5);
+            playNote(523, ctx.currentTime + 0.3, 0.8);
         } catch (e) { }
     };
+
+    const playReadySound = () => {
+        if (isMuted) return;
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const playNote = (freq: number, startTime: number, duration: number) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, startTime);
+                gain.gain.setValueAtTime(0, startTime);
+                gain.gain.linearRampToValueAtTime(0.2, startTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            };
+            playNote(880, ctx.currentTime, 0.1);
+            playNote(880, ctx.currentTime + 0.2, 0.1);
+        } catch (e) { }
+    };
+
+    const [isConnected, setIsConnected] = useState(false);
+
+    useEffect(() => {
+        const staffData = localStorage.getItem('staff_info');
+        const adminData = localStorage.getItem('admin_info');
+        const rId = staffData ? JSON.parse(staffData).restaurantId : (adminData ? JSON.parse(adminData).id : null);
+
+        if (rId) {
+            setRestaurantId(rId);
+            socketClient.connect();
+
+            // Initial Join
+            socketClient.joinRestaurant(rId);
+
+            // Listen for connection changes
+            const unsubConnection = socketClient.onConnectionChange((connected) => {
+                setIsConnected(connected);
+                if (connected) {
+                    // Re-join on reconnect
+                    console.log('🔄 Reconnected, joining room:', rId);
+                    socketClient.joinRestaurant(rId);
+                    fetchOrders(); // Refresh data on reconnect
+                }
+            });
+
+            const unsubNew = socketClient.onNewOrder((data) => {
+                setOrders(prev => [data.order as Order, ...prev]);
+                setNewOrderAlert(true);
+                playOrderSound();
+            });
+
+            const unsubUpdate = socketClient.onOrderUpdated((data) => {
+                const updatedOrder = data.order as Order;
+                setOrders(prev => prev.map(o =>
+                    o.id === updatedOrder.id ? updatedOrder : o
+                ));
+
+                // If my order is ready
+                if (updatedOrder.status === 'READY' && (!updatedOrder.waiterId || updatedOrder.waiterId === staffInfo?.id)) {
+                    playReadySound();
+                }
+            });
+
+            return () => {
+                unsubConnection();
+                unsubNew();
+                unsubUpdate();
+                socketClient.leaveRestaurant(rId);
+            };
+        }
+    }, [restaurantId, isMuted, staffInfo]);
 
     const getItemName = (item: Order['items'][0]) => {
         if (locale === 'fr' && item.menuItem.nameFr) return item.menuItem.nameFr;
@@ -168,40 +269,33 @@ export default function WaiterPage() {
     const getFilteredOrders = () => {
         switch (filter) {
             case 'pending':
-                // Show all pending orders (unassigned)
                 return orders.filter(o => o.status === 'PENDING');
             case 'my-active':
-                // Show orders I accepted OR orders in prep that I accepted
-                // If using admin token (no staffInfo), show all active.
-                if (!staffInfo) {
-                    return orders.filter(o => ['ACCEPTED', 'PREPARING'].includes(o.status));
-                }
-                return orders.filter(o =>
-                    ['ACCEPTED', 'PREPARING'].includes(o.status) &&
-                    (o.waiterId === staffInfo.id)
-                );
+                if (!staffInfo) return orders.filter(o => ['ACCEPTED', 'PREPARING'].includes(o.status));
+                return orders.filter(o => ['ACCEPTED', 'PREPARING'].includes(o.status) && o.waiterId === staffInfo.id);
             case 'ready':
-                // Show ready orders. Ideally nicely highlighted if assigned to me.
+                // Show ALL ready orders, but maybe highlight mine
                 return orders.filter(o => o.status === 'READY');
             default:
                 return orders;
         }
     };
 
-    // Count logic
-    const pendingCount = orders.filter(o => o.status === 'PENDING').length;
-    const myActiveCount = staffInfo
-        ? orders.filter(o => ['ACCEPTED', 'PREPARING'].includes(o.status) && o.waiterId === staffInfo.id).length
-        : orders.filter(o => ['ACCEPTED', 'PREPARING'].includes(o.status)).length;
+    const activeOrders = getFilteredOrders();
 
+    // Counts
+    const pendingCount = orders.filter(o => o.status === 'PENDING').length;
     const readyCount = orders.filter(o => o.status === 'READY').length;
-    const myReadyCount = staffInfo
-        ? orders.filter(o => o.status === 'READY' && o.waiterId === staffInfo.id).length
-        : readyCount;
+
+    const handleLogout = () => {
+        localStorage.removeItem('staff_token');
+        localStorage.removeItem('staff_info');
+        router.push('/staff/login');
+    };
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center bg-dark-bg text-dark-text">
                 <div className="text-center">
                     <Users className="w-12 h-12 mx-auto mb-4 text-accent animate-pulse" />
                     <p>{t('common.loading')}</p>
@@ -211,41 +305,62 @@ export default function WaiterPage() {
     }
 
     return (
-        <div className="min-h-screen pb-20">
+        <div className="min-h-screen bg-dark-bg text-dark-text pb-6">
             {/* New Order Alert */}
             {newOrderAlert && (
-                <div className="fixed top-4 left-4 right-4 z-50 bg-accent text-white p-4 rounded-xl shadow-strong animate-slide-up cursor-pointer" onClick={() => setFilter('pending')}>
-                    <div className="flex items-center gap-3">
-                        <Bell className="w-6 h-6 animate-shake" />
-                        <span className="font-bold">New order received!</span>
-                    </div>
+                <div
+                    className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-accent text-white px-6 py-3 rounded-full shadow-strong animate-slide-up cursor-pointer flex items-center gap-2"
+                    onClick={() => { setFilter('pending'); setNewOrderAlert(false); }}
+                >
+                    <Bell className="w-5 h-5 animate-shake" />
+                    <span className="font-bold">New Order!</span>
                 </div>
             )}
 
             {/* Header */}
-            <header className="sticky top-0 z-40 bg-light-bg dark:bg-dark-bg border-b border-light-border dark:border-dark-border safe-area-top">
+            <header className="sticky top-0 z-40 bg-dark-card border-b border-dark-border shadow-md">
                 <div className="px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <Users className="w-6 h-6 text-accent" />
+                        <div className="p-2 bg-accent/10 rounded-lg">
+                            <Users className="w-6 h-6 text-accent" />
+                        </div>
                         <div>
-                            <h1 className="text-lg font-bold leading-none">{t('staff.waiter')}</h1>
-                            {staffInfo && <span className="text-xs text-light-muted">Hi, {staffInfo.name}</span>}
+                            <h1 className="text-xl font-bold leading-none">{t('staff.waiter')}</h1>
+                            <div className="flex items-center gap-2">
+                                {staffInfo && <p className="text-xs text-dark-muted mt-0.5">Hi, {staffInfo.name}</p>}
+                                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${isConnected
+                                    ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                                    : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                    }`}>
+                                    <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                                    {isConnected ? 'LIVE' : 'OFFLINE'}
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setIsMuted(!isMuted)}
+                            className={`p-2 rounded-full transition-colors ${isMuted ? 'text-red-400 bg-red-400/10' : 'text-dark-muted hover:bg-dark-border'}`}
+                        >
+                            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                        </button>
+                        <button
+                            onClick={handleToggleHistory}
+                            className="p-2 rounded-full text-dark-muted hover:bg-dark-border transition-colors group"
+                            title="History"
+                        >
+                            <History className="w-5 h-5 group-hover:rotate-[-10deg] transition-transform" />
+                        </button>
                         <button
                             onClick={fetchOrders}
-                            className="p-2 rounded-full hover:bg-light-border dark:hover:bg-dark-border"
+                            className="p-2 rounded-full text-dark-muted hover:bg-dark-border transition-colors"
                         >
                             <RefreshCw className="w-5 h-5" />
                         </button>
                         <button
-                            onClick={() => {
-                                localStorage.removeItem('staff_token');
-                                localStorage.removeItem('staff_info');
-                                router.push('/staff/login');
-                            }}
-                            className="p-2 rounded-full hover:bg-red-500/10 text-red-500"
+                            onClick={handleLogout}
+                            className="p-2 rounded-full text-red-500 hover:bg-red-500/10 transition-colors"
                         >
                             <LogOut className="w-5 h-5" />
                         </button>
@@ -253,172 +368,232 @@ export default function WaiterPage() {
                 </div>
 
                 {/* Filter tabs */}
-                <div className="flex px-4 pb-3 gap-2 overflow-x-auto">
+                <div className="flex px-4 pb-3 gap-2 overflow-x-auto hide-scrollbar">
                     <button
                         onClick={() => setFilter('pending')}
-                        className={`flex-1 py-3 px-2 rounded-xl font-medium flex-col sm:flex-row flex items-center justify-center gap-1 transition-colors min-w-[80px] ${filter === 'pending'
-                            ? 'bg-status-pending text-white'
-                            : 'bg-light-card dark:bg-dark-card'
+                        className={`flex-1 py-2 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border ${filter === 'pending'
+                            ? 'bg-status-pending text-white border-status-pending shadow-lg shadow-status-pending/20'
+                            : 'bg-dark-bg text-dark-muted border-dark-border'
                             }`}
                     >
-                        <Clock className="w-5 h-5" />
-                        <span className="text-sm">Pending</span>
-                        {pendingCount > 0 && (
-                            <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-bold">{pendingCount}</span>
-                        )}
+                        <span>New</span>
+                        {pendingCount > 0 && <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">{pendingCount}</span>}
                     </button>
+
                     <button
                         onClick={() => setFilter('my-active')}
-                        className={`flex-1 py-3 px-2 rounded-xl font-medium flex-col sm:flex-row flex items-center justify-center gap-1 transition-colors min-w-[80px] ${filter === 'my-active'
-                            ? 'bg-status-preparing text-white'
-                            : 'bg-light-card dark:bg-dark-card'
+                        className={`flex-1 py-2 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border ${filter === 'my-active'
+                            ? 'bg-status-accepted text-white border-status-accepted shadow-lg shadow-status-accepted/20'
+                            : 'bg-dark-bg text-dark-muted border-dark-border'
                             }`}
                     >
-                        <ChefHat className="w-5 h-5" />
-                        <span className="text-sm">My Orders</span>
-                        {myActiveCount > 0 && (
-                            <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-bold">{myActiveCount}</span>
-                        )}
+                        <span>My Orders</span>
                     </button>
+
                     <button
                         onClick={() => setFilter('ready')}
-                        className={`flex-1 py-3 px-2 rounded-xl font-medium flex-col sm:flex-row flex items-center justify-center gap-1 transition-colors min-w-[80px] ${filter === 'ready'
-                            ? 'bg-status-ready text-white'
-                            : 'bg-light-card dark:bg-dark-card'
+                        className={`flex-1 py-2 px-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all border ${filter === 'ready'
+                            ? 'bg-status-ready text-white border-status-ready shadow-lg shadow-status-ready/20'
+                            : 'bg-dark-bg text-dark-muted border-dark-border'
                             }`}
                     >
-                        <Bell className="w-5 h-5" />
-                        <span className="text-sm">Ready</span>
-                        {readyCount > 0 && (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${myReadyCount > 0 ? 'bg-red-500 text-white animate-pulse' : 'bg-white/20'}`}>
-                                {readyCount}
-                            </span>
-                        )}
+                        <span>Ready</span>
+                        {readyCount > 0 && <span className="bg-white/20 px-1.5 py-0.5 rounded text-xs">{readyCount}</span>}
                     </button>
                 </div>
             </header>
 
-            {/* Orders */}
+            {/* Orders Grid */}
             <main className="p-4">
-                {getFilteredOrders().length === 0 ? (
-                    <div className="text-center py-12">
-                        <Users className="w-16 h-16 mx-auto mb-4 text-light-muted dark:text-dark-muted opacity-50" />
-                        <p className="text-light-muted dark:text-dark-muted">
-                            {filter === 'my-active' ? 'You have no active orders.' : t('staff.noOrders')}
-                        </p>
+                {activeOrders.length === 0 ? (
+                    <div className="text-center py-20 opacity-50">
+                        <Users className="w-24 h-24 mx-auto mb-4 text-dark-border" />
+                        <h2 className="text-2xl font-bold text-dark-muted">{t('staff.noOrders')}</h2>
+                        <p className="text-dark-muted">Good job, {staffInfo?.name || 'Waiter'}!</p>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        {getFilteredOrders().map((order) => {
-                            const status = statusConfig[order.status as keyof typeof statusConfig];
-                            const StatusIcon = status.icon;
-                            const isAssignedToMe = Boolean(staffInfo && order.waiterId === staffInfo.id);
-                            const isAssignedToOther = Boolean(staffInfo && order.waiterId && order.waiterId !== staffInfo.id);
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {activeOrders.map((order) => {
+                            // Waiter Actions Logic
+                            const isMine = order.waiterId === staffInfo?.id;
+                            let action = null;
+                            let undo = null;
 
-                            // If filtered to "Ready", but I'm not the owner, maybe show it differently?
-                            // For now, simpler is better.
+                            if (order.status === 'PENDING') {
+                                action = { label: 'Accept', status: 'ACCEPTED', icon: UserCheck, color: 'bg-status-accepted' };
+                            } else if (order.status === 'ACCEPTED' && isMine) {
+                                // Waiting for kitchen...
+                                undo = { label: 'Undo', status: 'PENDING' };
+                            } else if (order.status === 'READY') {
+                                action = { label: 'Deliver', status: 'DELIVERED', icon: Package, color: 'bg-accent' };
+                            } else if (order.status === 'DELIVERED' && isMine) {
+                                undo = { label: 'Undo', status: 'READY' };
+                                // Note: DELIVERED usually disappears from view, but if we showed history, we could undo.
+                                // In 'my-active' view, DELIVERED is not shown. 
+                                // So undo delivered is only possible if we view history, which we don't here.
+                            }
 
                             return (
-                                <div key={order.id} className={`card overflow-hidden border-2 ${order.status === 'READY' && isAssignedToMe ? 'border-status-ready animate-pulse-soft' : 'border-transparent'}`}>
-                                    {/* Order header */}
-                                    <div className={`${status.bg} px-4 py-3 flex items-center justify-between`}>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl font-bold">T{order.table.tableNumber}</span>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-medium">#{order.orderNumber}</span>
-                                                    {order.waiter && (
-                                                        <span className="text-[10px] px-1.5 py-0.5 bg-black/10 rounded-full flex items-center gap-1">
-                                                            <Users className="w-3 h-3" />
-                                                            {isAssignedToMe ? 'Me' : order.waiter.name}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs text-light-muted dark:text-dark-muted">
-                                                    {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </p>
+                                <div
+                                    key={order.id}
+                                    className={`bg-dark-card rounded-xl overflow-hidden border-2 flex flex-col shadow-lg transition-all ${order.status === 'READY' ? 'border-status-ready shadow-status-ready/20' : 'border-dark-border hover:border-dark-muted'
+                                        }`}
+                                >
+                                    {/* Order Header */}
+                                    <div className={`${statusColors[order.status as keyof typeof statusColors]} text-white px-4 py-3 flex justify-between items-start`}>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-3xl font-black tracking-tight">#{order.orderNumber}</span>
+                                                <span className="bg-black/20 px-2 py-0.5 rounded text-sm font-medium backdrop-blur-sm">
+                                                    Table {order.table.tableNumber}
+                                                </span>
                                             </div>
+                                            {order.waiter && (
+                                                <div className="text-xs opacity-90 mt-1 flex items-center gap-1">
+                                                    <UserCheck className="w-3 h-3" />
+                                                    {order.waiter.name}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className={`flex items-center gap-1 ${status.color}`}>
-                                            <StatusIcon className="w-5 h-5" />
-                                            <span className="font-medium text-sm">{status.label}</span>
+                                        <div className="bg-black/30 px-2 py-1 rounded-lg backdrop-blur-sm">
+                                            <OrderTimer createdAt={order.createdAt} />
                                         </div>
                                     </div>
 
-                                    {/* Items */}
-                                    <div className="p-4">
-                                        <ul className="space-y-1 mb-4">
+                                    {/* Order Items */}
+                                    <div className="p-4 flex-grow">
+                                        <ul className="space-y-3">
                                             {order.items.map((item) => (
-                                                <li key={item.id} className="flex justify-between text-sm">
-                                                    <span>
-                                                        <span className="font-bold">{item.quantity}×</span> {getItemName(item)}
-                                                    </span>
+                                                <li key={item.id} className="flex items-start gap-3">
+                                                    <div className="bg-dark-bg w-8 h-8 flex items-center justify-center rounded-lg font-bold text-accent shrink-0 border border-dark-border">
+                                                        {item.quantity}
+                                                    </div>
+                                                    <div className="pt-0.5">
+                                                        <span className="font-semibold text-lg leading-tight block">{getItemName(item)}</span>
+                                                        {item.notes && (
+                                                            <div className="text-red-400 text-sm font-medium mt-1 flex items-start gap-1">
+                                                                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                                                                <span>{item.notes}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
 
-                                        {/* Notes */}
                                         {order.notes && (
-                                            <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 p-2 rounded-lg text-xs mb-3">
-                                                Note: {order.notes}
+                                            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-200">
+                                                <strong className="block text-red-400 text-xs uppercase tracking-wider mb-1">Kitchen Note:</strong>
+                                                {order.notes}
                                             </div>
                                         )}
+                                    </div>
 
-                                        <div className="flex items-center justify-between pt-3 border-t border-light-border dark:border-dark-border mb-4">
-                                            <span className="font-medium text-sm">Total</span>
-                                            <span className="font-bold text-accent">{parseFloat(order.totalAmount).toFixed(2)} DH</span>
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="flex gap-2">
-                                            {order.status === 'PENDING' && (
-                                                <>
-                                                    <button
-                                                        onClick={() => updateStatus(order.id, 'ACCEPTED')}
-                                                        className="flex-1 btn-primary py-3 text-sm"
-                                                    >
-                                                        <CheckCircle className="w-4 h-4 mr-2" />
-                                                        {t('staff.accept')}
-                                                    </button>
-
-                                                    {/* Only managers can cancel? Or waiter can too. */}
-                                                    <button
-                                                        onClick={() => {
-                                                            if (confirm('Cancel this order?')) updateStatus(order.id, 'CANCELLED')
-                                                        }}
-                                                        className="px-3 py-3 rounded-lg bg-status-cancelled/10 text-status-cancelled hover:bg-status-cancelled/20"
-                                                    >
-                                                        <XCircle className="w-5 h-5" />
-                                                    </button>
-                                                </>
-                                            )}
-
-                                            {/* PREPARING: Wait for Kitchen */}
-                                            {order.status === 'PREPARING' && (
-                                                <div className="w-full py-2 text-center text-status-preparing bg-status-preparing/5 rounded-lg text-sm font-medium animate-pulse">
-                                                    Cooking...
-                                                </div>
-                                            )}
-
-                                            {/* READY: Deliver */}
-                                            {order.status === 'READY' && (
+                                    {/* Action Footer */}
+                                    {(action || undo) && (
+                                        <div className="p-3 bg-dark-bg/50 border-t border-dark-border grid grid-cols-[auto_1fr] gap-2">
+                                            {undo ? (
                                                 <button
-                                                    onClick={() => updateStatus(order.id, 'DELIVERED')}
-                                                    disabled={isAssignedToOther} // Disable if assigned to someone else
-                                                    className={`flex-1 btn-primary py-3 text-sm ${isAssignedToOther ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                                                    onClick={() => updateStatus(order.id, undo.status)}
+                                                    className="w-12 h-12 flex items-center justify-center rounded-lg bg-dark-card hover:bg-dark-border text-dark-muted hover:text-white transition-colors border border-dark-border"
+                                                    title={undo.label}
                                                 >
-                                                    <Package className="w-4 h-4 mr-2" />
-                                                    {isAssignedToOther ? `Assigned to ${order.waiter?.name}` : t('staff.deliver')}
+                                                    <RotateCcw className="w-5 h-5" />
+                                                </button>
+                                            ) : (
+                                                <div className="w-0"></div> // Spacer logic if no undo
+                                            )}
+
+                                            {action && (
+                                                <button
+                                                    onClick={() => updateStatus(order.id, action.status)}
+                                                    className={`h-12 rounded-lg font-bold text-lg flex items-center justify-center gap-2 text-white shadow-lg transition-transform active:scale-[0.98] ${action.color} hover:brightness-110`}
+                                                >
+                                                    <action.icon className="w-5 h-5" />
+                                                    {action.label}
                                                 </button>
                                             )}
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             );
                         })}
                     </div>
                 )}
             </main>
+            {/* Order History Modal */}
+            {isHistoryOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-dark-card w-full max-w-2xl max-h-[80vh] rounded-2xl border border-dark-border shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="p-4 border-b border-dark-border flex justify-between items-center bg-dark-bg/50">
+                            <div className="flex items-center gap-2 text-dark-muted">
+                                <History className="w-5 h-5" />
+                                <h3 className="font-bold text-lg">My Order History</h3>
+                            </div>
+                            <button
+                                onClick={() => setIsHistoryOpen(false)}
+                                className="p-2 rounded-lg hover:bg-dark-border text-dark-muted transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="flex-grow overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-dark-border">
+                            {historyLoading ? (
+                                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                                    <div className="w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+                                    <p className="text-dark-muted font-medium">Loading history...</p>
+                                </div>
+                            ) : historyOrders.length === 0 ? (
+                                <div className="text-center py-20 opacity-50">
+                                    <Package className="w-16 h-16 mx-auto mb-4 text-dark-border" />
+                                    <p className="text-dark-muted font-bold text-lg">No historic orders found</p>
+                                    <p className="text-sm">Completed orders will appear here.</p>
+                                </div>
+                            ) : (
+                                historyOrders.map((order) => (
+                                    <div key={order.id} className="bg-dark-bg/40 border border-dark-border/60 rounded-xl p-4 flex flex-col gap-3 hover:border-dark-muted transition-colors shadow-sm">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-2xl font-black text-dark-muted tracking-tight">#{order.orderNumber}</span>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-bold bg-dark-card px-2 py-0.5 rounded border border-dark-border w-fit text-accent">
+                                                        Table {order.table.tableNumber}
+                                                    </span>
+                                                    <span className="text-[10px] text-dark-muted mt-1 uppercase font-bold tracking-wider">
+                                                        {new Date(order.createdAt).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border shadow-sm ${order.status === 'DELIVERED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
+                                                {order.status}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-dark-card/50 p-3 rounded-lg border border-dark-border/40">
+                                            <ul className="space-y-1">
+                                                {order.items.map((item) => (
+                                                    <li key={item.id} className="text-sm flex justify-between">
+                                                        <span className="text-dark-muted font-medium">
+                                                            <span className="text-accent font-bold mr-2">{item.quantity}x</span>
+                                                            {getItemName(item)}
+                                                        </span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+
+                                        <div className="flex justify-between items-center text-xs font-bold pt-1 border-t border-dark-border/30">
+                                            <span className="text-dark-muted uppercase tracking-wider">Total Amount</span>
+                                            <span className="text-accent text-sm font-black">{order.totalAmount} DH</span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

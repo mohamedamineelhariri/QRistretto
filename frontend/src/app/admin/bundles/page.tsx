@@ -47,6 +47,8 @@ export default function BundlesPage() {
         nameFr: '',
         nameAr: '',
         description: '',
+        descriptionFr: '',
+        descriptionAr: '',
         price: '',
         available: true
     });
@@ -102,15 +104,9 @@ export default function BundlesPage() {
             };
 
             if (editingBundle) {
-                await api.request(`/admin/bundles/${editingBundle.id}`, {
-                    method: 'PUT',
-                    body: JSON.stringify(data)
-                });
+                await api.updateBundle(editingBundle.id, data);
             } else {
-                await api.request('/admin/bundles', {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
+                await api.createBundle(data);
             }
             resetForm();
             fetchBundles();
@@ -129,6 +125,8 @@ export default function BundlesPage() {
                 nameFr: bundle.nameFr || '',
                 nameAr: bundle.nameAr || '',
                 description: bundle.description || '',
+                descriptionFr: bundle.descriptionFr || '',
+                descriptionAr: bundle.descriptionAr || '',
                 price: bundle.price,
                 available: bundle.available
             });
@@ -150,6 +148,8 @@ export default function BundlesPage() {
             nameFr: '',
             nameAr: '',
             description: '',
+            descriptionFr: '',
+            descriptionAr: '',
             price: '',
             available: true
         });
@@ -169,7 +169,7 @@ export default function BundlesPage() {
 
     const toggleAvailability = async (id: string) => {
         try {
-            await api.request(`/admin/bundles/${id}/toggle`, { method: 'PATCH' });
+            await api.toggleBundle(id);
             fetchBundles();
         } catch (error) {
             alert('Failed to toggle availability');
@@ -337,33 +337,73 @@ export default function BundlesPage() {
                         </div>
 
                         <div className="p-4 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Name (EN) *</label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="input"
-                                    required
-                                />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Name (EN) *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        className="input"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Name (FR)</label>
+                                    <input
+                                        type="text"
+                                        value={formData.nameFr}
+                                        onChange={(e) => setFormData({ ...formData, nameFr: e.target.value })}
+                                        className="input"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Name (AR)</label>
+                                    <input
+                                        type="text"
+                                        value={formData.nameAr}
+                                        onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                                        className="input text-right"
+                                        dir="rtl"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Bundle Price (DH) *</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.price}
+                                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                        className="input"
+                                        required
+                                    />
+                                </div>
                             </div>
+
                             <div>
-                                <label className="block text-sm font-medium mb-1">Description</label>
+                                <label className="block text-sm font-medium mb-1">Description (EN)</label>
                                 <textarea
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                     className="input min-h-[60px] resize-none"
                                 />
                             </div>
+
                             <div>
-                                <label className="block text-sm font-medium mb-1">Bundle Price (DH) *</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={formData.price}
-                                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                                    className="input"
-                                    required
+                                <label className="block text-sm font-medium mb-1">Description (FR)</label>
+                                <textarea
+                                    value={formData.descriptionFr || ''}
+                                    onChange={(e) => setFormData({ ...formData, descriptionFr: e.target.value })}
+                                    className="input min-h-[60px] resize-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Description (AR)</label>
+                                <textarea
+                                    value={formData.descriptionAr || ''}
+                                    onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value })}
+                                    className="input min-h-[60px] resize-none text-right"
+                                    dir="rtl"
                                 />
                             </div>
 

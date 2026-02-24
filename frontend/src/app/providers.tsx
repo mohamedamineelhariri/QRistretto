@@ -33,6 +33,7 @@ const translations: Record<Locale, Record<string, string>> = {
         'common.add': 'Add',
         'common.close': 'Close',
         'common.back': 'Back',
+        'common.rateLimit': 'Too many orders. Please wait a minute.',
 
         // Menu
         'menu.title': 'Menu',
@@ -106,6 +107,7 @@ const translations: Record<Locale, Record<string, string>> = {
         'common.add': 'Ajouter',
         'common.close': 'Fermer',
         'common.back': 'Retour',
+        'common.rateLimit': 'Trop de commandes. Veuillez patienter une minute.',
 
         // Menu
         'menu.title': 'Menu',
@@ -179,6 +181,7 @@ const translations: Record<Locale, Record<string, string>> = {
         'common.add': 'إضافة',
         'common.close': 'إغلاق',
         'common.back': 'رجوع',
+        'common.rateLimit': 'طلبات كثيرة جداً. يرجى الانتظار لمدة دقيقة.',
 
         // Menu
         'menu.title': 'القائمة',

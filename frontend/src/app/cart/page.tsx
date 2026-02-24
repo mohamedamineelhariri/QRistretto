@@ -25,6 +25,8 @@ export default function CartPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [success, setSuccess] = useState(false);
+
     const getItemName = (item: typeof items[0]) => {
         if (locale === 'fr' && item.nameFr) return item.nameFr;
         if (locale === 'ar' && item.nameAr) return item.nameAr;
@@ -36,6 +38,7 @@ export default function CartPage() {
 
         setLoading(true);
         setError(null);
+        let orderSuccess = false;
 
         try {
             const response = await api.createOrder({
@@ -49,6 +52,8 @@ export default function CartPage() {
             });
 
             if (response.success && response.data) {
+                orderSuccess = true;
+                setSuccess(true);
                 const order = response.data.order as any;
                 setCurrentOrder(order.id);
                 clearCart();
@@ -57,15 +62,31 @@ export default function CartPage() {
                 setError(response.message || 'Failed to place order');
             }
         } catch (err: any) {
-            setError(err.message || 'Failed to place order');
+            console.error('Order Error:', err);
+
+            // Handle Rate Limiting (429) specifically
+            if (err.message?.includes('Too many orders') || err.status === 429) {
+                setError(t('common.rateLimit') || 'Too many orders. Please wait a minute.');
+            } else if (err.message?.includes('QR') || err.status === 403) {
+                // Token expired or invalid
+                setError(t('qr.expired'));
+                setTimeout(() => {
+                    useCartStore.getState().setTableInfo('', '', '');
+                    router.push('/');
+                }, 2000);
+            } else {
+                setError(err.message || 'Failed to place order');
+            }
         } finally {
-            setLoading(false);
+            if (!orderSuccess) {
+                setLoading(false);
+            }
         }
     };
 
     const total = getTotal();
 
-    if (items.length === 0) {
+    if (items.length === 0 && !success) {
         return (
             <div className="min-h-screen flex flex-col">
                 <header className="sticky top-0 z-40 bg-light-bg dark:bg-dark-bg border-b border-light-border dark:border-dark-border safe-area-top">

@@ -18,6 +18,7 @@ async function main() {
             nameAr: 'مقهى ديمو',
             adminEmail: 'admin@cafedemo.ma',
             adminPassword: hashedPassword,
+            isActive: true,
         },
     });
 

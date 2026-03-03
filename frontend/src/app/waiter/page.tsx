@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, CheckCircle, ChefHat, Bell, Package, RefreshCw, Users, Volume2, VolumeX, LogOut, RotateCcw, AlertTriangle, UserCheck, History, X } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Bell, Package, RefreshCw, Users, Volume2, VolumeX, LogOut, RotateCcw, AlertTriangle, UserCheck, History, X, Search, SearchX } from 'lucide-react';
 import { api } from '@/lib/api';
 import { socketClient } from '@/lib/socket';
 import { useApp } from '../providers';
@@ -28,6 +28,10 @@ interface Order {
             name: string;
             nameFr: string | null;
             nameAr: string | null;
+            imageUrl: string | null;
+            description: string | null;
+            prepTimeMinutes: number | null;
+            calories: number | null;
         };
     }>;
 }
@@ -85,6 +89,15 @@ export default function WaiterPage() {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+
+    // Ordering State
+    const [isOrdering, setIsOrdering] = useState(false);
+    const [tables, setTables] = useState<any[]>([]);
+    const [categories, setCategories] = useState<any[]>([]);
+    const [selectedTable, setSelectedTable] = useState<string | null>(null);
+    const [manualCart, setManualCart] = useState<Array<{ menuItemId: string, name: string, price: number, quantity: number }>>([]);
+    const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+    const [menuSearchQuery, setMenuSearchQuery] = useState('');
 
     // Auth Check
     useEffect(() => {
@@ -162,6 +175,60 @@ export default function WaiterPage() {
             fetchHistory();
         }
         setIsHistoryOpen(!isHistoryOpen);
+    };
+
+    const fetchTablesAndMenu = async () => {
+        try {
+            const [tablesRes, menuRes] = await Promise.all([
+                api.getTables(),
+                api.getMenu(restaurantId!)
+            ]);
+            if (tablesRes.success) setTables(tablesRes.data?.tables || []);
+            if (menuRes.success) setCategories(menuRes.data?.categories || []);
+        } catch (error) {
+            console.error('Fetch ordering data error:', error);
+        }
+    };
+
+    const handleStartOrdering = () => {
+        if (!restaurantId) return;
+        fetchTablesAndMenu();
+        setIsOrdering(true);
+        setSelectedTable(null);
+        setManualCart([]);
+    };
+
+    const addToManualCart = (item: any) => {
+        setManualCart(prev => {
+            const existing = prev.find(i => i.menuItemId === item.id);
+            if (existing) {
+                return prev.map(i => i.menuItemId === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+            }
+            return [...prev, { menuItemId: item.id, name: item.name, price: item.price, quantity: 1 }];
+        });
+    };
+
+    const removeFromManualCart = (menuItemId: string) => {
+        setManualCart(prev => prev.filter(i => i.menuItemId !== menuItemId));
+    };
+
+    const submitManualOrder = async () => {
+        if (!selectedTable || manualCart.length === 0) return;
+        try {
+            setIsSubmittingOrder(true);
+            const res = await api.createStaffOrder({
+                tableId: selectedTable,
+                items: manualCart.map(i => ({ menuItemId: i.menuItemId, quantity: i.quantity }))
+            });
+            if (res.success) {
+                setIsOrdering(false);
+                fetchOrders(); // Refresh list
+            }
+        } catch (error) {
+            console.error('Submit manual order error:', error);
+        } finally {
+            setIsSubmittingOrder(false);
+        }
     };
 
     const playOrderSound = () => {
@@ -318,7 +385,7 @@ export default function WaiterPage() {
             )}
 
             {/* Header */}
-            <header className="sticky top-0 z-40 bg-dark-card border-b border-dark-border shadow-md">
+            <header className="sticky top-0 z-40 bg-dark-card border-b border-dark-border shadow-md safe-area-top">
                 <div className="px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-accent/10 rounded-lg">
@@ -339,6 +406,13 @@ export default function WaiterPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleStartOrdering}
+                            className="flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-xl font-bold shadow-lg hover:brightness-110 transition-all active:scale-95"
+                        >
+                            <Package className="w-4 h-4" />
+                            <span>New</span>
+                        </button>
                         <button
                             onClick={() => setIsMuted(!isMuted)}
                             className={`p-2 rounded-full transition-colors ${isMuted ? 'text-red-400 bg-red-400/10' : 'text-dark-muted hover:bg-dark-border'}`}
@@ -428,9 +502,6 @@ export default function WaiterPage() {
                                 action = { label: 'Deliver', status: 'DELIVERED', icon: Package, color: 'bg-accent' };
                             } else if (order.status === 'DELIVERED' && isMine) {
                                 undo = { label: 'Undo', status: 'READY' };
-                                // Note: DELIVERED usually disappears from view, but if we showed history, we could undo.
-                                // In 'my-active' view, DELIVERED is not shown. 
-                                // So undo delivered is only possible if we view history, which we don't here.
                             }
 
                             return (
@@ -465,11 +536,20 @@ export default function WaiterPage() {
                                         <ul className="space-y-3">
                                             {order.items.map((item) => (
                                                 <li key={item.id} className="flex items-start gap-3">
-                                                    <div className="bg-dark-bg w-8 h-8 flex items-center justify-center rounded-lg font-bold text-accent shrink-0 border border-dark-border">
-                                                        {item.quantity}
+                                                    <div className="bg-accent/10 w-10 h-10 flex flex-col items-center justify-center rounded-xl font-bold text-accent shrink-0 border-2 border-accent/20 shadow-sm">
+                                                        <span className="text-[10px] opacity-60 leading-none mb-0.5 font-black">X</span>
+                                                        <span className="text-xl leading-none">{item.quantity}</span>
                                                     </div>
-                                                    <div className="pt-0.5">
-                                                        <span className="font-semibold text-lg leading-tight block">{getItemName(item)}</span>
+                                                    <div className="pt-0.5 flex-grow">
+                                                        <div className="flex justify-between items-start">
+                                                            <span className="font-bold text-lg leading-tight block">{getItemName(item)}</span>
+                                                            {item.menuItem.prepTimeMinutes && (
+                                                                <div className="flex items-center gap-1 text-[10px] bg-dark-bg px-1.5 py-0.5 rounded border border-dark-border text-dark-muted font-bold">
+                                                                    <Clock className="w-3 h-3" />
+                                                                    {item.menuItem.prepTimeMinutes}m
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         {item.notes && (
                                                             <div className="text-red-400 text-sm font-medium mt-1 flex items-start gap-1">
                                                                 <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
@@ -501,7 +581,7 @@ export default function WaiterPage() {
                                                     <RotateCcw className="w-5 h-5" />
                                                 </button>
                                             ) : (
-                                                <div className="w-0"></div> // Spacer logic if no undo
+                                                <div className="w-0"></div>
                                             )}
 
                                             {action && (
@@ -521,6 +601,7 @@ export default function WaiterPage() {
                     </div>
                 )}
             </main>
+
             {/* Order History Modal */}
             {isHistoryOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -590,6 +671,168 @@ export default function WaiterPage() {
                                     </div>
                                 ))
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Manual Order Modal */}
+            {isOrdering && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="bg-dark-card w-full max-w-2xl max-h-[90vh] rounded-2xl border border-dark-border shadow-2xl flex flex-col overflow-hidden">
+                        <div className="p-4 border-b border-dark-border flex justify-between items-center bg-dark-bg/50">
+                            <h3 className="font-bold text-lg">Create Manual Order</h3>
+                            <button onClick={() => setIsOrdering(false)} className="p-2 rounded-lg hover:bg-dark-border text-dark-muted"><X /></button>
+                        </div>
+
+                        <div className="flex-grow overflow-y-auto p-4 space-y-6">
+                            {/* Table Selection */}
+                            <section>
+                                <h4 className="text-sm font-bold text-dark-muted uppercase tracking-wider mb-3">1. Select Table</h4>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {tables.map(t => (
+                                        <button
+                                            key={t.id}
+                                            onClick={() => setSelectedTable(t.id)}
+                                            className={`p-3 rounded-xl border-2 font-bold transition-all ${selectedTable === t.id ? 'border-accent bg-accent/10 text-accent' : 'border-dark-border hover:border-dark-muted'}`}
+                                        >
+                                            #{t.tableNumber}
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* Menu Selection */}
+                            <section>
+                                <h4 className="text-sm font-bold text-dark-muted uppercase tracking-wider mb-3">2. Add items</h4>
+                                {/* Search Input */}
+                                <div className="relative mb-6">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-5 w-5 text-dark-muted" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={menuSearchQuery}
+                                        onChange={(e) => setMenuSearchQuery(e.target.value)}
+                                        placeholder="Search menu items..."
+                                        className="block w-full pl-10 pr-10 py-3 bg-dark-bg border border-dark-border rounded-xl text-white placeholder-dark-muted focus:ring-2 focus:ring-accent focus:border-accent transition-all"
+                                    />
+                                    {menuSearchQuery && (
+                                        <button
+                                            onClick={() => setMenuSearchQuery('')}
+                                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-dark-muted hover:text-white"
+                                        >
+                                            <SearchX className="h-5 w-5" />
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-4">
+                                    {categories.map(cat => {
+                                        const filteredItems = cat.items.filter((item: any) =>
+                                            item.nameEn.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
+                                            (item.description && item.description.toLowerCase().includes(menuSearchQuery.toLowerCase()))
+                                        );
+
+                                        if (filteredItems.length === 0) return null;
+
+                                        return (
+                                            <div key={cat.category}>
+                                                <h5 className="text-xs font-bold text-accent mb-2">{cat.categoryEn}</h5>
+                                                <div className="grid grid-cols-1 gap-2">
+                                                    {filteredItems.map((item: any) => (
+                                                        <button
+                                                            key={item.id}
+                                                            onClick={() => addToManualCart(item)}
+                                                            className="flex gap-4 p-3 bg-dark-bg rounded-xl border border-dark-border hover:border-accent transition-all group group active:scale-[0.98] text-left"
+                                                        >
+                                                            {item.imageUrl && (
+                                                                <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-dark-border">
+                                                                    <img src={item.imageUrl} alt={item.nameEn} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-grow min-w-0">
+                                                                <div className="flex justify-between items-start">
+                                                                    <span className="font-bold text-white truncate">{item.nameEn}</span>
+                                                                    <span className="text-accent font-black shrink-0 ml-2 group-hover:scale-110 transition-transform">{item.price} DH</span>
+                                                                </div>
+                                                                {item.description && (
+                                                                    <p className="text-xs text-dark-muted line-clamp-2 mt-0.5 leading-relaxed">{item.description}</p>
+                                                                )}
+                                                                <div className="flex items-center gap-3 mt-2">
+                                                                    {item.prepTimeMinutes && (
+                                                                        <div className="flex items-center gap-1 text-[10px] text-dark-muted font-bold">
+                                                                            <Clock className="w-3 h-3" />
+                                                                            {item.prepTimeMinutes}m
+                                                                        </div>
+                                                                    )}
+                                                                    {item.calories && (
+                                                                        <div className="flex items-center gap-1 text-[10px] text-dark-muted font-bold">
+                                                                            <ChefHat className="w-3 h-3" />
+                                                                            {item.calories} kcal
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {categories.every(cat =>
+                                        !cat.items.some((item: any) =>
+                                            item.nameEn.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
+                                            (item.description && item.description.toLowerCase().includes(menuSearchQuery.toLowerCase()))
+                                        )
+                                    ) && (
+                                            <div className="text-center py-10">
+                                                <SearchX className="w-12 h-12 mx-auto mb-4 text-dark-muted opacity-20" />
+                                                <p className="text-dark-muted font-medium">No items found matching "{menuSearchQuery}"</p>
+                                                <button
+                                                    onClick={() => setMenuSearchQuery('')}
+                                                    className="mt-4 text-accent font-bold hover:underline"
+                                                >
+                                                    Clear search
+                                                </button>
+                                            </div>
+                                        )}
+                                </div>
+                            </section>
+
+                            {/* Cart Summary */}
+                            {manualCart.length > 0 && (
+                                <section className="p-4 bg-accent/5 border border-accent/20 rounded-xl">
+                                    <h4 className="text-sm font-bold text-accent uppercase tracking-wider mb-3">Order Summary</h4>
+                                    <div className="space-y-2">
+                                        {manualCart.map(item => (
+                                            <div key={item.menuItemId} className="flex justify-between items-center">
+                                                <span>{item.quantity}x {item.name}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-bold">{item.price * item.quantity} DH</span>
+                                                    <button onClick={() => removeFromManualCart(item.menuItemId)} className="text-red-500"><X className="w-4 h-4" /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <div className="pt-2 border-t border-accent/20 flex justify-between font-black text-lg">
+                                            <span>Total</span>
+                                            <span>{manualCart.reduce((sum, i) => sum + (i.price * i.quantity), 0)} DH</span>
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t border-dark-border">
+                            <button
+                                disabled={!selectedTable || manualCart.length === 0 || isSubmittingOrder}
+                                onClick={submitManualOrder}
+                                className="w-full py-4 rounded-xl bg-accent text-white font-bold text-lg shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isSubmittingOrder ? <RefreshCw className="animate-spin" /> : <CheckCircle />}
+                                <span>Complete Order</span>
+                            </button>
                         </div>
                     </div>
                 </div>

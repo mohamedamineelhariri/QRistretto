@@ -104,18 +104,51 @@ export default function HomePage() {
 
             if (result.hasContent) {
                 const scannedValue = result.content;
-                // Extract token from URL (e.g. http://.../?token=abc or just the token itself)
-                let extractedToken = scannedValue;
+                console.log('📸 [SCAN] Content detected:', scannedValue);
+
+                let extractedToken = '';
+                let extractedTableId = '';
+
+                // 1. Check for legacy ?token= format
                 try {
                     const url = new URL(scannedValue);
                     const urlToken = url.searchParams.get('token');
-                    if (urlToken) extractedToken = urlToken;
+                    if (urlToken) {
+                        extractedToken = urlToken;
+                    }
+                    // 2. Check for dynamic /api/qr/scan/TABLE_ID format
+                    else if (url.pathname.includes('/api/qr/scan/')) {
+                        const parts = url.pathname.split('/');
+                        extractedTableId = parts[parts.length - 1];
+                    }
                 } catch (_) {
-                    // not a URL, use raw value as token
+                    // Not a valid URL, treat as direct token
+                    extractedToken = scannedValue;
                 }
 
                 setStatus('loading');
-                validateToken(extractedToken);
+
+                // 3. Resolve or Validate
+                if (extractedTableId) {
+                    console.log('🔄 [SCAN] Resolving tableId:', extractedTableId);
+                    try {
+                        const res = await api.resolveScan(extractedTableId);
+                        if (res.success && res.data?.token) {
+                            validateToken(res.data.token);
+                        } else {
+                            throw new Error('Could not resolve table');
+                        }
+                    } catch (e) {
+                        setStatus('invalid');
+                        setErrorMessage(t('qr.invalid'));
+                    }
+                } else if (extractedToken) {
+                    console.log('✅ [SCAN] Using token directly:', extractedToken);
+                    validateToken(extractedToken);
+                } else {
+                    setStatus('invalid');
+                    setErrorMessage(t('qr.invalid'));
+                }
             }
         } catch (err) {
             document.body.classList.remove('qr-scanning');
@@ -138,25 +171,27 @@ export default function HomePage() {
         <main className="min-h-screen flex items-center justify-center p-6">
             {/* QR Scanning Overlay */}
             {isScanning && (
-                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
-                    <div className="relative w-64 h-64 mb-8">
-                        {/* Corner brackets */}
-                        <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-accent rounded-tl-sm" />
-                        <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-accent rounded-tr-sm" />
-                        <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-accent rounded-bl-sm" />
-                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-accent rounded-br-sm" />
-                        {/* Scanning line animation */}
-                        <div className="absolute inset-x-2 top-1/2 h-0.5 bg-accent opacity-80 animate-pulse" />
+                <div id="qr-scanner-ui" className="fixed inset-0 z-50 flex flex-col items-center justify-center pointer-events-none">
+                    <div className="pointer-events-auto flex flex-col items-center justify-center w-full h-full">
+                        <div className="relative w-64 h-64 mb-8">
+                            {/* Corner brackets */}
+                            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-accent rounded-tl-sm" />
+                            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-accent rounded-tr-sm" />
+                            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-accent rounded-bl-sm" />
+                            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-accent rounded-br-sm" />
+                            {/* Scanning line animation */}
+                            <div className="absolute inset-x-2 top-1/2 h-0.5 bg-accent opacity-80 animate-pulse" />
+                        </div>
+                        <p className="text-white text-lg font-medium mb-2 drop-shadow-lg">Point at the QR code</p>
+                        <p className="text-white/80 text-sm mb-8 drop-shadow-lg">on your table</p>
+                        <button
+                            onClick={stopScan}
+                            className="flex items-center gap-2 bg-black/40 backdrop-blur-md text-white px-6 py-3 rounded-full font-medium border border-white/20 active:scale-95 transition-transform"
+                        >
+                            <X className="w-4 h-4" />
+                            Cancel
+                        </button>
                     </div>
-                    <p className="text-white text-lg font-medium mb-2">Point at the QR code</p>
-                    <p className="text-white/60 text-sm mb-8">on your table</p>
-                    <button
-                        onClick={stopScan}
-                        className="flex items-center gap-2 bg-white/10 text-white px-6 py-3 rounded-full font-medium"
-                    >
-                        <X className="w-4 h-4" />
-                        Cancel
-                    </button>
                 </div>
             )}
 

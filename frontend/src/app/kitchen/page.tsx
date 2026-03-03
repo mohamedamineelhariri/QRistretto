@@ -26,6 +26,10 @@ interface Order {
             name: string;
             nameFr: string | null;
             nameAr: string | null;
+            imageUrl: string | null;
+            description: string | null;
+            prepTimeMinutes: number | null;
+            calories: number | null;
         };
     }>;
 }
@@ -310,7 +314,7 @@ export default function KitchenPage() {
             )}
 
             {/* Header */}
-            <header className="sticky top-0 z-40 bg-dark-card border-b border-dark-border shadow-md">
+            <header className="sticky top-0 z-40 bg-dark-card border-b border-dark-border shadow-md safe-area-top">
                 <div className="px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-accent/10 rounded-lg">
@@ -441,14 +445,23 @@ export default function KitchenPage() {
                                         <ul className="space-y-3">
                                             {order.items.map((item) => (
                                                 <li key={item.id} className="flex items-start gap-3">
-                                                    <div className="bg-dark-bg w-8 h-8 flex items-center justify-center rounded-lg font-bold text-accent shrink-0 border border-dark-border">
-                                                        {item.quantity}
+                                                    <div className="bg-accent/10 w-10 h-10 flex flex-col items-center justify-center rounded-xl font-bold text-accent shrink-0 border-2 border-accent/20 shadow-sm transition-transform hover:scale-110">
+                                                        <span className="text-xs opacity-60 leading-none mb-0.5 font-black">X</span>
+                                                        <span className="text-xl leading-none">{item.quantity}</span>
                                                     </div>
-                                                    <div className="pt-0.5">
-                                                        <span className="font-semibold text-lg leading-tight block">{getItemName(item)}</span>
+                                                    <div className="pt-0.5 flex-grow">
+                                                        <div className="flex justify-between items-start">
+                                                            <span className="font-bold text-xl leading-tight text-white mb-1">{getItemName(item)}</span>
+                                                            {item.menuItem.prepTimeMinutes && (
+                                                                <div className="flex items-center gap-1 text-[10px] bg-dark-bg px-1.5 py-0.5 rounded border border-dark-border text-dark-muted font-bold">
+                                                                    <Clock className="w-3 h-3" />
+                                                                    {item.menuItem.prepTimeMinutes}m
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         {item.notes && (
-                                                            <div className="text-red-400 text-sm font-medium mt-1 flex items-start gap-1">
-                                                                <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                                                            <div className="bg-red-500/10 text-red-400 text-xs font-bold p-2 rounded-lg mt-2 flex items-start gap-2 border border-red-500/20 animate-pulse">
+                                                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                                                                 <span>{item.notes}</span>
                                                             </div>
                                                         )}

@@ -84,6 +84,10 @@ export async function createOrder(restaurantId, tableId, items, notes = null) {
                             name: true,
                             nameFr: true,
                             nameAr: true,
+                            imageUrl: true,
+                            description: true,
+                            prepTimeMinutes: true,
+                            calories: true
                         },
                     },
                 },
@@ -98,6 +102,25 @@ export async function createOrder(restaurantId, tableId, items, notes = null) {
     });
 
     return order;
+}
+
+/**
+ * Create a new order from staff (waiter)
+ * This skips Wi-Fi and QR token validation
+ */
+export async function createStaffOrder(restaurantId, tableId, items, staffId, role, notes = null) {
+    // Reuse core creation logic
+    const order = await createOrder(restaurantId, tableId, items, notes);
+
+    // Automatically transition to ACCEPTED if created by staff
+    // and assign the creator as the waiter
+    try {
+        const updatedOrder = await updateOrderStatus(order.id, restaurantId, 'ACCEPTED', staffId, role);
+        return updatedOrder;
+    } catch (error) {
+        console.error('Failed to auto-accept staff order:', error);
+        return order; // Return as PENDING if auto-accept fails for some reason
+    }
 }
 
 /**
@@ -117,6 +140,10 @@ export async function getOrdersByStatus(restaurantId, statuses = ['PENDING', 'AC
                             name: true,
                             nameFr: true,
                             nameAr: true,
+                            imageUrl: true,
+                            description: true,
+                            prepTimeMinutes: true,
+                            calories: true
                         },
                     },
                 },
@@ -146,6 +173,10 @@ export async function getOrderById(orderId) {
                             name: true,
                             nameFr: true,
                             nameAr: true,
+                            imageUrl: true,
+                            description: true,
+                            prepTimeMinutes: true,
+                            calories: true
                         },
                     },
                 },
@@ -232,6 +263,10 @@ export async function updateOrderStatus(orderId, restaurantId, newStatus, staffI
                             name: true,
                             nameFr: true,
                             nameAr: true,
+                            imageUrl: true,
+                            description: true,
+                            prepTimeMinutes: true,
+                            calories: true
                         },
                     },
                 },
@@ -275,6 +310,10 @@ export async function getOrderHistory(restaurantId, limit = 50, offset = 0, staf
                             name: true,
                             nameFr: true,
                             nameAr: true,
+                            imageUrl: true,
+                            description: true,
+                            prepTimeMinutes: true,
+                            calories: true
                         },
                     },
                 },
@@ -313,6 +352,10 @@ export async function getOrdersByTable(tableId) {
                             name: true,
                             nameFr: true,
                             nameAr: true,
+                            imageUrl: true,
+                            description: true,
+                            prepTimeMinutes: true,
+                            calories: true
                         },
                     },
                 },

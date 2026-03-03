@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+const SOCKET_URL = 'https://1199-160-177-249-126.ngrok-free.app';
 
 class SocketClient {
     private socket: Socket | null = null;
@@ -26,7 +26,11 @@ class SocketClient {
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 1000,
+            extraHeaders: {
+                'ngrok-skip-browser-warning': 'true'
+            }
         });
+
 
         console.log('🔌 [SOCKET] Socket instance created, attaching event listeners');
 

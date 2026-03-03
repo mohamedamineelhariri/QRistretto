@@ -27,43 +27,50 @@ const app = express();
 const httpServer = createServer(app);
 
 // ============================================
-// SECURITY MIDDLEWARE (OWASP Best Practices)
+// CORS SETUP - MUST BE AT THE TOP
 // ============================================
-
-// Helmet: Sets various HTTP headers for security
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "blob:"],
-        },
-    },
-    crossOriginEmbedderPolicy: false,
-}));
-
-// CORS: Allow both Hotspot IP and Localhost
 const allowedOrigins = [
     process.env.FRONTEND_URL,
     'http://localhost:3000',
-    'http://127.0.0.1:3000'
+    'http://127.0.0.1:3000',
+    'http://localhost',
+    'capacitor://localhost',
 ].filter(Boolean);
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+        // In development, allow all origins
+        if (process.env.NODE_ENV === 'development') return callback(null, true);
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
         }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'Pragma', 'ngrok-skip-browser-warning'],
 }));
+
+// ============================================
+// SECURITY MIDDLEWARE (OWASP Best Practices)
+// ============================================
+
+// Helmet: Sets various HTTP headers for security
+// Relaxed for development to allow remote mobile access
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["*"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            imgSrc: ["*"],
+            connectSrc: ["*"],
+        },
+    },
+    crossOriginEmbedderPolicy: false,
+}));
+
 
 // Rate limiting: Prevent brute force attacks
 const limiter = rateLimit({

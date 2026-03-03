@@ -22,28 +22,38 @@ router.get(
     async (req, res) => {
         try {
             const { tableId } = req.params;
+            const { format } = req.query;
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
-            console.log(`[QR Scan] Table scan detected: ${tableId}`);
+            console.log(`[QR Scan] Table scan detected: ${tableId} (Format: ${format || 'redirect'})`);
 
-            // Auto-generate fresh token instant
+            // Auto-generate fresh token
             const tokenData = await qrService.createQRToken(tableId);
 
-            // Notify Admin UI to refresh this table's info (and timer)
+            // Notify Admin UI
             const io = req.app.get('io');
             if (io) {
-                // We don't have restaurantId here easily, so we emit to everyone for simplicity 
-                // or we could get it from tokenData.restaurantId
                 io.to(`restaurant:${tokenData.restaurantId}`).emit('table:updated', { tableId });
             }
 
-            // Redirect customer to frontend with the new token
+            // If JSON format requested, send the data instead of redirecting
+            if (format === 'json') {
+                return res.json({
+                    success: true,
+                    data: tokenData
+                });
+            }
+
+            // Default: Redirect customer to frontend with the new token
             const redirectUrl = `${baseUrl}?token=${tokenData.token}`;
             console.log(`[QR Scan] Redirecting to: ${redirectUrl}`);
 
             res.redirect(redirectUrl);
         } catch (error) {
             console.error('QR Scan error:', error);
+            if (req.query.format === 'json') {
+                return res.status(500).json({ success: false, message: error.message });
+            }
             const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             res.redirect(`${baseUrl}?error=table_not_found`);
         }

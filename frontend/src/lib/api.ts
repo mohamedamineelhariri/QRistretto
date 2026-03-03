@@ -1,4 +1,6 @@
-const API_URL = 'http://localhost:5000/api';
+// ngrok tunnel URL — no landing page, no password
+const API_URL = 'https://1199-160-177-249-126.ngrok-free.app/api';
+
 
 interface ApiResponse<T = unknown> {
     success: boolean;
@@ -22,7 +24,9 @@ class ApiClient {
     ): Promise<ApiResponse<T>> {
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
             ...(options.headers as Record<string, string>),
+
         };
 
         if (this.token) {
@@ -68,6 +72,22 @@ class ApiClient {
         }>(`/qr/validate/${token}`);
     }
 
+    // Resolve a permanent scan (exchanges tableId for a fresh session)
+    async resolveScan(tableId: string) {
+        // We use the same response structure as validateToken
+        // but we hit the /scan endpoint which creates a new token
+        // In this architecture, /scan/tableId redirects or returns a token.
+        // Let's check how the backend handles it.
+        return this.request<{
+            token: string;
+            expiresAt: string;
+            tableId: string;
+            tableNumber: number;
+            restaurantId: string;
+            restaurantName: string;
+        }>(`/qr/scan/${tableId}?format=json`);
+    }
+
     // Menu
     async getMenu(restaurantId: string, locale: string = 'en') {
         return this.request<{
@@ -99,6 +119,17 @@ class ApiClient {
         notes?: string;
     }) {
         return this.request<{ order: unknown; tableNumber: number }>('/orders', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    }
+
+    async createStaffOrder(data: {
+        tableId: string;
+        items: Array<{ menuItemId: string; quantity: number; notes?: string }>;
+        notes?: string;
+    }) {
+        return this.request<{ order: any }>('/orders/staff', {
             method: 'POST',
             body: JSON.stringify(data),
         });

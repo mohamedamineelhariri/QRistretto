@@ -102,6 +102,58 @@ router.post(
 );
 
 /**
+ * POST /api/orders/staff
+ * Create new order from staff (waiter/admin)
+ */
+router.post(
+    '/staff',
+    verifyToken,
+    [
+        body('tableId').isUUID().withMessage('Valid table ID required'),
+        body('items').isArray({ min: 1 }).withMessage('At least one item required'),
+        body('items.*.menuItemId').isUUID().withMessage('Valid menu item ID required'),
+        body('items.*.quantity').optional().isInt({ min: 1, max: 20 }).withMessage('Quantity must be 1-20'),
+        body('items.*.notes').optional().trim().isLength({ max: 200 }),
+        body('notes').optional().trim().isLength({ max: 500 }),
+        validate,
+    ],
+    async (req, res) => {
+        try {
+            const { tableId, items, notes } = req.body;
+
+            const order = await orderService.createStaffOrder(
+                req.restaurantId,
+                tableId,
+                items,
+                req.staffId,
+                req.staffRole,
+                notes
+            );
+
+            // Emit to dashboards
+            const io = req.app.get('io');
+            const roomName = `restaurant:${req.restaurantId}`;
+            io.to(roomName).emit('order:new', {
+                order,
+                tableNumber: order.table.tableNumber,
+            });
+
+            res.status(201).json({
+                success: true,
+                message: 'Order created successfully',
+                data: { order },
+            });
+        } catch (error) {
+            console.error('Staff order creation error:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to create order',
+            });
+        }
+    }
+);
+
+/**
  * GET /api/orders/:orderId
  * Get order by ID (for customer tracking)
  */

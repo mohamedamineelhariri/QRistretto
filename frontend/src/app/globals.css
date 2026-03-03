@@ -174,3 +174,23 @@
 .animate-shake {
   animation: shake 0.3s ease-in-out;
 }
+
+/* QR Scanner Support */
+body.qr-scanning {
+  background: transparent !important;
+}
+
+body.qr-scanning main {
+  background: transparent !important;
+}
+
+/* Hide everything except scanner UI when scanning */
+body.qr-scanning #qr-scanner-ui {
+  display: flex !important;
+  visibility: visible !important;
+}
+
+body.qr-scanning > *:not(main),
+body.qr-scanning main > *:not(#qr-scanner-ui) {
+  visibility: hidden !important;
+}
